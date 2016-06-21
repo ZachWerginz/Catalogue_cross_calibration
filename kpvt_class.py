@@ -7,25 +7,28 @@ import numpy as np
 import sunpy.map
 from matplotlib import colors
 
-from astropy.units import Quantity
+import astropy.units as u
 
 from sunpy.map import GenericMap
 from sunpy.sun import constants
 from sunpy.sun import sun
 from sunpy.cm import cm
+from collections import namedtuple
 
-__all__ = ["512", "SPMG"]
+Pair = namedtuple('Pair', 'x y')
 
-class 512(sunpy.map.GenericMap):
+__all__ = ["Ch512Map"]
+
+class Ch512Map(sunpy.map.GenericMap):
     """KPVT 512 Channel Image Map.
 
     """
 
     def __init__(self, data, header, **kwargs):
 
-        super(512, self).__init__(data, header, **kwargs)
+        super(Ch512Map, self).__init__(data, header, **kwargs)
 
-        # Any 512 Instrument specific keyword manipulation
+        # Any Ch512 Instrument specific keyword manipulation
         self.meta['detector'] = "512"
         self._fix_dsun()
         self._nickname = str(self.detector) + "" + str(self.measurement)
@@ -33,13 +36,19 @@ class 512(sunpy.map.GenericMap):
             self.meta['cunit1'] = 'arcsec'
         if self.meta['cunit2'] == 'ARC-SEC':
             self.meta['cunit2'] = 'arcsec'
-        
-        self.meta['pc2_1'] = 1
-        self.meta['pc1_2'] = 1
 
         self.data = self.data[2,:,:]
 
-     def _fix_dsun(self):
+
+
+    @property
+    def scale(self):
+
+        return Pair(self.meta['cdelt1'] * self.spatial_units.x / u.pixel * self.meta['CRR_SCLX'],
+                    self.meta['cdelt2'] * self.spatial_units.y / u.pixel * self.meta['CRR_SCLY'])
+
+
+    def _fix_dsun(self):
         """ Solar radius in arc-seconds at 1 au
             previous value radius_1au = 959.644
             radius = constants.average_angular_size
@@ -53,19 +62,18 @@ class 512(sunpy.map.GenericMap):
             http://soi.stanford.edu/data/ and
             http://soi.stanford.edu/magnetic/Lev1.8/ .
         """
-        scale = self.meta.get('xscale', self.meta.get('cdelt1'))
-        radius_in_pixels = self.meta.get('r_sun', self.meta.get('radius'))
-        radius = scale * radius_in_pixels
-        self.meta['radius'] = radius
+        #scale = self.meta.get('xscale', self.meta.get('cdelt1'))
+        #radius_in_pixels = self.meta.get('r_sun', self.meta.get('radius'))
+        #radius = scale * radius_in_pixels
+        #self.meta['radius'] = radius
 
-        if not radius:
+        #if not radius:
             # radius = sun.angular_size(self.date)
-            self.meta['dsun_obs'] = constants.au
-        else:
-            self.meta['dsun_obs'] = _dsunAtSoho(self.date, radius)
-    # Specify a classmethod that determines if the data-header pair matches
-    # the new instrument
+         #   self.meta['dsun_obs'] = constants.au
+        #else:
+         #   self.meta['dsun_obs'] = _dsunAtSoho(self.date, radius)
+
     @classmethod
     def is_datasource_for(cls, data, header, **kwargs):
-        """Determines if header corresponds to an 512 image"""
+        """Determines if header corresponds to an 512 Channel image"""
         return header.get('instrume') == '512-CH-MAG'
