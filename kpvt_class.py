@@ -5,7 +5,6 @@ __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
 
 import numpy as np
 import sunpy.map
-from matplotlib import colors
 
 import astropy.units as u
 
@@ -50,8 +49,8 @@ class Ch512Map(sunpy.map.GenericMap):
         return Pair(self.meta['cdelt1'] * self.spatial_units.x / u.pixel * self.meta['CRR_SCLX'],
                     self.meta['cdelt2'] * self.spatial_units.y / u.pixel * self.meta['CRR_SCLY'])
 
-
-    def _fix_dsun(self):
+    @property
+    def dsun(self):
         """ Solar radius in arc-seconds at 1 au
             previous value radius_1au = 959.644
             radius = constants.average_angular_size
@@ -65,16 +64,7 @@ class Ch512Map(sunpy.map.GenericMap):
             http://soi.stanford.edu/data/ and
             http://soi.stanford.edu/magnetic/Lev1.8/ .
         """
-        #scale = self.meta.get('xscale', self.meta.get('cdelt1'))
-        #radius_in_pixels = self.meta.get('r_sun', self.meta.get('radius'))
-        #radius = scale * radius_in_pixels
-        #self.meta['radius'] = radius
-
-        #if not radius:
-            # radius = sun.angular_size(self.date)
-         #   self.meta['dsun_obs'] = constants.au
-        #else:
-         #   self.meta['dsun_obs'] = _dsunAtSoho(self.date, radius)
+        return self.meta['EPH_R0'] * u.arcsec
 
     @classmethod
     def is_datasource_for(cls, data, header, **kwargs):
