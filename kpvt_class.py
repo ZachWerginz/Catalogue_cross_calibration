@@ -37,6 +37,9 @@ class Ch512Map(sunpy.map.GenericMap):
         if self.meta['cunit2'] == 'ARC-SEC':
             self.meta['cunit2'] = 'arcsec'
 
+        self.meta['pc2_1'] = 0
+        self.meta['pc1_2'] = 0
+
         self.data = self.data[2,:,:]
 
 
