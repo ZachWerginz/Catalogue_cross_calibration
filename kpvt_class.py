@@ -37,8 +37,13 @@ class Ch512Map(sunpy.map.GenericMap):
 
         self.meta['pc2_1'] = 0
         self.meta['pc1_2'] = 0
+        self.meta['B0'] = self.meta['EPH_B0']
+        self.meta['L0'] = self.meta['EPH_L0']
+        del self.meta['eph_b0']
+        del self.meta['eph_l0']
 
         self.data = self.data[2,:,:]
+
 
 
 
@@ -50,19 +55,19 @@ class Ch512Map(sunpy.map.GenericMap):
 
     @property
     def rsun_obs(self):
-        """ KPVT Magnetograms use a different keyword for distance to sun"""
+        """KPVT Magnetograms use a different keyword for distance to sun."""
         return self.meta['EPH_R0'] * u.arcsec
 
     @property
     def dsun(self):
-        """ KPVT at earth"""
+        """KPVT at earth."""
         dsun = sun.sunearth_distance(self.date).to(u.m)
 
         return u.Quantity(dsun, 'm') 
 
     @classmethod
     def is_datasource_for(cls, data, header, **kwargs):
-        """Determines if header corresponds to an 512 Channel image"""
+        """Determines if header corresponds to an 512 Channel image."""
         return header.get('instrume') == '512-CH-MAG'
 
 class SPMGMap(sunpy.map.GenericMap):
@@ -79,6 +84,16 @@ class SPMGMap(sunpy.map.GenericMap):
             self.meta['cunit1'] = 'arcsec'
         if self.meta['cunit2'] == 'ARC-SEC':
             self.meta['cunit2'] = 'arcsec'
+        self.meta['detector'] = "SPMG"
+        
+        self.meta['pc2_1'] = 0
+        self.meta['pc1_2'] = 0
+        self.meta['B0'] = self.meta['EPH_B0']
+        self.meta['L0'] = self.meta['EPH_L0']
+        del self.meta['eph_b0']
+        del self.meta['eph_l0']
+
+        self.data = self.data[5,:,:]
 
     @property
     def rsun_obs(self):
