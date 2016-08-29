@@ -104,36 +104,7 @@ def calc_pol(mgnt, pole, pf_data=None, meta={'deg_lim': 75.0, 'inv_px_tol': .85}
         return pf_data
     # Otherwise calculate data from the poles.
     else:
-        meanf = M.nanmean(mgnt.im_raw_u[vp_px])
-        meanfc = M.nanmean(mgnt.im_corr[vp_px])
-        sumf = M.nansum(mgnt.im_raw_u[vp_px])
-        sumfc = M.nansum(mgnt.im_corr[vp_px])
-        unsflux = M.nansum(abs(mgnt.mflux_raw[vp_px]))
-        unsfluxc = M.nansum(abs(mgnt.mflux_corr[vp_px]))
-        sflux = M.nansum(mgnt.mflux_raw[vp_px])
-        sfluxc = M.nansum(mgnt.mflux_corr[vp_px])
-        posfluxc = M.nansum(mgnt.mflux_corr[posp_px])
-        negfluxc = M.nansum(mgnt.mflux_corr[negp_px])
-        visarea = M.nansum(mgnt.area[vp_px])
-        max_pxflux = M.nanmax(abs(mgnt.mflux_corr[vp_px]))
-        max_pxf = M.nanmax(mgnt.im_raw.data[vp_px])
-        max_pxfc =  M.nanmax(mgnt.im_corr[vp_px])
-
-        # Corrected field might be zero. Replace entries with NaNs.
-        if unsfluxc == 0.0:
-            unsfluxc = M(np.nan, np.nan)
-            sfluxc = M(np.nan, np.nan)
-            posfluxc = M(np.nan, np.nan)
-            negfluxc = M(np.nan, np.nan)
-            max_pxflux = np.nan
-            swt = 4
-
-        var = {'meanf': meanf, 'meanfc': meanfc, 'sumf': sumf, 'sumfc': sumfc,
-                'unsflux': unsflux, 'unsfluxc': unsfluxc, 'sflux': sflux,
-                'sfluxc': sfluxc, 'posfluxc': posfluxc, 'negfluxc': negfluxc,
-                'nvp_px': np.size(vp_px), 'p_ratio': np.size(vp_px)/np.size(p_px),
-                'visarea': visarea, 'max_pxflux': max_pxflux, 'max_pxf': max_pxf,
-                'max_pxfc': max_pxfc, 'swt': swt}
+        var = calc_parameters(mgnt, p_px, vp_px, posp_px, negp_px)
         # Assign data values per north/south pole.
         for x in var.items():
             if pole == 'north':
@@ -179,6 +150,47 @@ def validate(p, vp, pos, neg, pole, tol=0.85):
         return 3
     return 0
 
+def calc_parameters(mgnt, p, vp, posp, negp):
+    """Calculates certain parameters based on passed pixel groups.
+
+    p:      pixels defined by the polar crown
+    vp:     finite pixels in the polar crown
+    posp:   positive flux pixels in the polar crown
+    negp:   negative flux pixels in the polar crown
+    """
+    swt = 0
+    meanf = M.nanmean(mgnt.im_raw_u[vp])
+    meanfc = M.nanmean(mgnt.im_corr[vp])
+    sumf = M.nansum(mgnt.im_raw_u[vp])
+    sumfc = M.nansum(mgnt.im_corr[vp])
+    unsflux = M.nansum(abs(mgnt.mflux_raw[vp]))
+    unsfluxc = M.nansum(abs(mgnt.mflux_corr[vp]))
+    sflux = M.nansum(mgnt.mflux_raw[vp])
+    sfluxc = M.nansum(mgnt.mflux_corr[vp])
+    posfluxc = M.nansum(mgnt.mflux_corr[posp])
+    negfluxc = M.nansum(mgnt.mflux_corr[negp])
+    visarea = M.nansum(mgnt.area[vp])
+    max_pxflux = M.nanmax(abs(mgnt.mflux_corr[vp]))
+    max_pxf = M.nanmax(mgnt.im_raw.data[vp])
+    max_pxfc =  M.nanmax(mgnt.im_corr[vp])
+
+    # Corrected field might be zero. Replace entries with NaNs.
+    if unsfluxc == 0.0:
+        unsfluxc = M(np.nan, np.nan)
+        sfluxc = M(np.nan, np.nan)
+        posfluxc = M(np.nan, np.nan)
+        negfluxc = M(np.nan, np.nan)
+        max_pxflux = np.nan
+        swt = 4
+
+    var = {'meanf': meanf, 'meanfc': meanfc, 'sumf': sumf, 'sumfc': sumfc,
+                'unsflux': unsflux, 'unsfluxc': unsfluxc, 'sflux': sflux,
+                'sfluxc': sfluxc, 'posfluxc': posfluxc, 'negfluxc': negfluxc,
+                'nvp_px': np.size(vp), 'p_ratio': np.size(vp)/np.size(p),
+                'visarea': visarea, 'max_pxflux': max_pxflux, 'max_pxf': max_pxf,
+                'max_pxfc': max_pxfc, 'swt': swt}
+    return var
+
 def process(seg, date):
     while date <= seg.meta['end_date']:
         print(date)
@@ -186,8 +198,8 @@ def process(seg, date):
         if mgnt != -1:
             print("Calculating polar parameters")
             data = data0.copy()
-            calc_pol(data, mgnt, 'north', seg.meta)
-            calc_pol(data, mgnt, 'south', seg.meta)
+            calc_pol(mgnt, 'north', pf_data=data, meta=seg.meta)
+            calc_pol(mgnt, 'south', pf_data=data, meta=seg.meta)
             seg.pf.append(data)
             split_and_export(seg)
             export_to_hdf(seg)
