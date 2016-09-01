@@ -2,9 +2,13 @@
 # that are close in time and blocks them into latitude/longitude areas.
 
 import zaw_util as z
+from zaw_coord import CRD
 import datetime as dt
+import numpy as np
+import pandas as pd
 import itertools
 from uncertainty import Measurement as M
+from astropy import units as u
 from astropy.io import fits
 import sunpy.time
 import getopt
@@ -42,78 +46,58 @@ def parse_args():
         else:
             assert False, "unhandled option"
 
-def date_defaults(instr):
-    if instr == '512':
-        return dt.datetime(1976, 1, 5), dt.datetime(1993, 4, 9)
-    elif instr == 'spmg':
-        return dt.datetime(1992, 4, 21), dt.datetime(1999, 12, 30)
-    elif instr == 'mdi':
-        return dt.datetime(1996, 4, 15), dt.datetime(2011, 4, 11)
-    elif instr == 'hmi':
-        return dt.datetime(2010, 4, 8), dt.datetime(2016, 7, 5)
-    else:
-        raise ValueError('Unrecognized instrument')
 
 def find_match(date, f_list):
     best = f_list[0]
     bestTimeDelta = dt.timedelta(1)  #48 hour max
 
     for f in f_list:
-        timeDelta = date - get_header_date(f)
+        timeDelta = date - z.get_header_date(f)
         if abs(timeDelta) < abs(bestTimeDelta):
             bestTimeDelta = timeDelta
             best = f
 
     return best
 
-def get_header_date(f):
-    hdulist = fits.open(f)
-
-    for hdu in hdulist:
-        try:
-            time = sunpy.time.parse_time(hdu.header['DATE_OBS'])
-        except KeyError:
-            try:
-                time = sunpy.time.parse_time(hdu.header['DATE-OBS'])
-            except KeyError:
-                try:
-                    time = sunpy.time.parse_time(hdu.header['T_OBS'])
-                except:
-                    continue
-    hdulist.close()
-
-    return time
-
 def process_date(i1, i2, date):
     print(date.isoformat())
-    try:
-        fList1 = z.search_file(date, i1, auto=False)
-        fList2 = z.search_file(date, i2, auto=False)
-    except IOError:
-        print("No match for date.")
-        raise
 
-    return list(itertools.product(fList1, fList2))
+    fList1 = []
+    fList2 = []
+
+    #Include loop to include 24 hour difference
+    for i in range(-1, 2):
+        try:
+            fList1.extend(z.search_file(date + dt.timedelta(i), i1, auto=False))
+            fList2.extend(z.search_file(date, i2, auto=False))
+        except IOError:
+            continue
+
+
+    return list(set(itertools.product(fList1, fList2)))
 
 def process_instruments(i1, i2):
-    start_i1, end_i1 = date_defaults(i1)
-    start_i2, end_i2 = date_defaults(i2)
+    """Returns a list of valid file combinations.
+
+    Searches for files within 48 hours of each other between instruments.
+    """
+    start_i1, end_i1 = z.date_defaults(i1)
+    start_i2, end_i2 = z.date_defaults(i2)
 
     start = max(start_i1, start_i2)
     end = min(end_i1, end_i2)
     date = start
-    good_dates = []
+    files = []
 
     while date < end:
         try:
-            process_date(i1, i2, date)
-            good_dates.append(date)
+            files.extend(process_date(i1, i2, date))
         except IOError:
             continue
         finally:
             date += dt.timedelta(1)
 
-    return good_dates
+    return list(set(files))
 
 def lon_lat_indices(m, lat1, lat2, lon1, lon2):
     p = np.where((m.lath > lat1) & (m.lath < lat2)
@@ -130,6 +114,62 @@ def lon_lat_indices(m, lat1, lat2, lon1, lon2):
 
     return p, vp, posp, negp
 
+def coordinate_compare(i1, i2):
+    filePairs = process_instruments(i1, i2)
+    pairInfo = {}
+    infoList = []
+
+    for pair in filePairs:
+        print(pair)
+
+    for pair in filePairs:
+        instr1 = CRD(pair[0])
+        instr2 = CRD(pair[1])
+        instr1.heliographic()
+        instr2.heliographic()
+        ind1 = np.where((instr1.lath < 30) & (instr1.lath > -30))
+        ind2 = np.where((instr2.lath < 30) & (instr2.lath > -30))
+        pairInfo['Instrument1'] = pair[0]
+        pairInfo['Instrument2'] = pair[1]
+        pairInfo['timeDelta'] = abs(instr1.im_raw.date - instr2.im_raw.date)
+        pairInfo['lonMax1'] = np.nanmax(instr1.lonh.v[ind1])
+        pairInfo['lonMin1'] = np.nanmin(instr1.lonh.v[ind1])
+        pairInfo['lonMax2'] = np.nanmax(instr2.lonh.v[ind2])
+        pairInfo['lonMin2'] = np.nanmin(instr2.lonh.v[ind2])
+        pairInfo['deltaLon1'] = pairInfo['lonMax1'] - pairInfo['lonMin1']
+        pairInfo['deltaLon2'] = pairInfo['lonMax2'] - pairInfo['lonMin2']
+        pairInfo['latMax1'] = np.nanmax(instr1.lath.v)
+        pairInfo['latMin1'] = np.nanmin(instr1.lath.v)
+        pairInfo['latMax2'] = np.nanmax(instr2.lath.v)
+        pairInfo['latMin2'] = np.nanmin(instr2.lath.v)
+        pairInfo['deltaLat1'] = pairInfo['latMax1'] - pairInfo['latMin1']
+        pairInfo['deltaLat2'] = pairInfo['latMax2'] - pairInfo['latMin2']
+        infoList.append(pairInfo.copy())
+        if len(infoList) > 100: break
+
+    return infoList
+
+def fix_longitude(f1, f2):
+    m1 = CRD(f1)
+    m2 = CRD(f2)
+    m1.heliographic()
+    m2.heliographic()
+    #Apply differential Rotation
+    rotation = z.diff_rot(m1, m2)
+    m2.lonh_rot = rotation.value + m2.lonh
+
+    #Compare reference pixels
+    x1 = int(np.around(m1.X0))
+    y1 = int(np.around(m1.Y0))
+    x2 = int(np.around(m2.X0))
+    y2 = int(np.around(m2.Y0))
+
+    lonDelta = m2.lonh_rot[x2, y2] - m1.lonh[x1, y1]
+    m2.lonh_shift = m2.lonh_rot - lonDelta
+
+    return m1, m2
+
+        
 def main():
     global i1, i2
     parse_args()
@@ -138,12 +178,15 @@ def main():
     print(date)
     if    i1 == None:    i1 = input('Enter first instrument: ')
     if    i2 == None:    i2 = input('Enter second instrument: ')
-    if date is not None:
-        return process_date(i1, i2, date)
-    else:
-        #maybe return just a list of paired files, not dates?
-        dates = process_instruments(i1, i2)
-        return dates
+    # if date is not None:
+    #     return process_date(i1, i2, date)
+    # else:
+    #     return process_instruments(i1, i2)
+    instrumentInfo = coordinate_compare(i1, i2)
+    print(instrumentInfo)
+    df = pd.DataFrame(instrumentInfo, columns=instrumentInfo[0].keys())
+    df.to_csv('test')
+
 
 if __name__ == "__main__":
     main()
