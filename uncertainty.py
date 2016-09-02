@@ -211,6 +211,12 @@ class Measurement:
         except AttributeError:
             return np.nanmax(array)
 
+    def nanmin(array):
+        try:
+            return np.nanmin(array.v)
+        except AttributeError:
+            return np.nanmin(array)
+
     def meshgrid(xRow, yRow):
         xg = Measurement(0,0)
         yg = Measurement(0,0)

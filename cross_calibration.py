@@ -6,6 +6,7 @@ from zaw_coord import CRD
 import datetime as dt
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 import itertools
 from uncertainty import Measurement as M
 from astropy import units as u
@@ -13,6 +14,8 @@ from astropy.io import fits
 import sunpy.time
 import getopt
 import sys
+import copy
+
 
 i1 = None       #Instrument 1
 i2 = None       #Instrument 2
@@ -46,10 +49,9 @@ def parse_args():
         else:
             assert False, "unhandled option"
 
-
 def find_match(date, f_list):
     best = f_list[0]
-    bestTimeDelta = dt.timedelta(1)  #48 hour max
+    bestTimeDelta = dt.timedelta(1)  #24 hour max
 
     for f in f_list:
         timeDelta = date - z.get_header_date(f)
@@ -99,21 +101,6 @@ def process_instruments(i1, i2):
 
     return list(set(files))
 
-def lon_lat_indices(m, lat1, lat2, lon1, lon2):
-    p = np.where((m.lath > lat1) & (m.lath < lat2)
-            & (m.lonh > lon1) & (m.lonh < lon2))
-
-    vp = np.where((m.lath > lat1) & (m.lath < lat2)
-            & (m.lonh > lon1) & (m.lonh < lon2) & M.isfinite(m.im_corr))
-
-    posp = np.where((m.lath > lat1) & (m.lath < lat2)
-            & (m.lonh > lon1) & (m.lonh < lon2) & (m.im_corr > 0))
-
-    negp = np.where((m.lath > lat1) & (m.lath < lat2)
-            & (m.lonh > lon1) & (m.lonh < lon2) & (m.im_corr < 0))
-
-    return p, vp, posp, negp
-
 def coordinate_compare(i1, i2):
     filePairs = process_instruments(i1, i2)
     pairInfo = {}
@@ -150,13 +137,14 @@ def coordinate_compare(i1, i2):
     return infoList
 
 def fix_longitude(f1, f2):
+    """Will shift the longitude of second magnetogram to match the first."""
     m1 = CRD(f1)
     m2 = CRD(f2)
     m1.heliographic()
     m2.heliographic()
     #Apply differential Rotation
     rotation = z.diff_rot(m1, m2)
-    m2.lonh_rot = rotation.value + m2.lonh
+    m2.lonhRot = rotation.value + m2.lonh
 
     #Compare reference pixels
     x1 = int(np.around(m1.X0))
@@ -164,12 +152,103 @@ def fix_longitude(f1, f2):
     x2 = int(np.around(m2.X0))
     y2 = int(np.around(m2.Y0))
 
-    lonDelta = m2.lonh_rot[x2, y2] - m1.lonh[x1, y1]
-    m2.lonh_shift = m2.lonh_rot - lonDelta
+    lonDelta = m2.lonhRot[x2, y2] - m1.lonh[x1, y1]
+    m2.lonhShift = m2.lonhRot - lonDelta
+    m1.lonhShift = m1.lonh
 
     return m1, m2
 
-        
+def fragment(mgnt, n):
+    #Split magnetogram up into bands bounded by latitude
+    mgnt.lonhShift[mgnt.rg > mgnt.rsun*np.sin(85.0*np.pi/180)] = np.nan
+    bandLats = split(n)
+    bandInd = get_latBand_indices(mgnt, bandLats)
+    bands = {'ind': bandInd, 'lat': bandLats}
+    #Now split magnetogram up further into blocks bounded by
+    #latitude and longitude
+    blocks = split_latitude_bands(mgnt, bands['lat'], bands['ind'])
+    blocks['lat'] = bandLats
+    return blocks
+
+def split(n, minimum=-90, maximum=90):
+    return np.linspace(minimum, maximum, n + 1)
+
+def get_latBand_indices(mgnt, bandLats):
+    ind_dict = {}
+    for i in range(len(bandLats) - 1):
+        ind_dict[i] = np.where((mgnt.lath > bandLats[i]) & (mgnt.lath < bandLats[i+1]))
+        #print("{}: Number of pixels = {}".format(i, np.size(ind_dict[i])))
+
+    return ind_dict
+
+def get_lonBand_indices(mgnt, minLat, maxLat, lonBand):
+    ind_dict = {}
+    for i in range(len(lonBand) - 1):
+        ind_dict[i] = np.where((mgnt.lath > minLat) & (mgnt.lath < maxLat)& (mgnt.lonh > lonBand[i]) & (mgnt.lonh < lonBand[i+1]))
+
+    return ind_dict
+
+def split_latitude_bands(mgnt, bandLats, bandInd=None):
+    blocks = {'bands': {}, 'lat': {} }
+    blockBands = {}
+
+    if bandInd is None:
+        bandInd = get_latBand_indices(mgnt, bandLats)
+
+    k = len(bandInd)
+    print(k)
+    for bandNum, indices in bandInd.items():
+        blockBands[bandNum] = {}
+        if np.size(indices) == 0:
+            blockBands[bandNum] = np.array([])
+            continue 
+        minLat = M.nanmin(mgnt.lath[indices])
+        maxLat = M.nanmax(mgnt.lath[indices])
+        print((minLat + maxLat)/2)
+        print(M.cos((minLat + maxLat)*np.pi/360))
+        new_n = np.round(k*abs(M.cos((minLat + maxLat)*np.pi/360)))
+        if new_n < 1: new_n = 1
+        print(new_n)
+        lonBand = split(new_n ,M.nanmin(mgnt.lonh[indices]), M.nanmax(mgnt.lonh[indices]))
+        print(lonBand)
+        blockBands[bandNum] = {'ind': get_lonBand_indices(mgnt, minLat, maxLat, lonBand), 'lonbands': lonBand}
+
+    blocks['bands'] = blockBands
+
+    return blocks
+
+def calculate_param_from_block(mgnt, blocks):
+    bandLats = blocks['lat']
+    blocks2 = copy.deepcopy(blocks)
+    for bandnum, band in blocks2['bands'].items():
+        blocks2['bands'][bandnum]['ind'] = get_lonBand_indices(mgnt, blocks2['lat'][bandnum], blocks2['lat'][bandnum + 1] , blocks2['bands'][bandnum]['lonbands'])
+
+    return blocks2
+
+def block_area(mgnt, blocks):
+    for keyi in blocks['bands'].keys():
+        for keyj, indices in blocks['bands'][keyi]['ind'].items():
+            print(M.nansum(mgnt.area[indices]))
+
+
+def block_plot(mgnt, blocks):
+    im = mgnt.lonhShift.v
+    c = 0
+    for keyi in blocks['bands'].keys():
+        try:
+            for keyj, indices in blocks['bands'][keyi]['ind'].items():
+                try:
+                    im[indices] = c
+                except:
+                    continue
+                finally:
+                    c += 1
+        except:
+            continue
+
+    plt.imshow(im, cmap='prism', vmin=0, vmax=M.nanmax(im))
+    plt.show()
+
 def main():
     global i1, i2
     parse_args()
