@@ -21,6 +21,17 @@ i1 = None       #Instrument 1
 i2 = None       #Instrument 2
 date = None     #Date to be examined
 
+class block(Object):
+
+    def __init(self, bounds, indices):
+        """Accepts heliographic bounds and a list of indices for block """
+        self.bounds = bounds
+        self.indices = indices
+
+    def min_latitude(self):
+        return bounds
+
+
 def usage():
     print('Usage: cross_calibration.py [-d data-root] [-f instrument 1] [-s instrument 2] [-i date]')
 
@@ -102,6 +113,7 @@ def process_instruments(i1, i2):
     return list(set(files))
 
 def coordinate_compare(i1, i2):
+    """A function used to compare two instruments longitude stats."""
     filePairs = process_instruments(i1, i2)
     pairInfo = {}
     infoList = []
@@ -137,7 +149,14 @@ def coordinate_compare(i1, i2):
     return infoList
 
 def fix_longitude(f1, f2):
-    """Will shift the longitude of second magnetogram to match the first."""
+    """
+    Will shift the longitude of second magnetogram to match the first.
+
+    Uses differential rotation to update the second magnetogram's longitude.
+    Then, afterwards it will shift the longitudes to match the first,
+    considering they will only be off by some constant.
+    """
+
     m1 = CRD(f1)
     m2 = CRD(f2)
     m1.heliographic()
@@ -153,14 +172,23 @@ def fix_longitude(f1, f2):
     y2 = int(np.around(m2.Y0))
 
     lonDelta = m2.lonhRot[x2, y2] - m1.lonh[x1, y1]
-    m2.lonhShift = m2.lonhRot - lonDelta
-    m1.lonhShift = m1.lonh
+    m2.lonhOld = m2.lonh
+    m2.lonh = m2.lonhRot - lonDelta
 
     return m1, m2
 
 def fragment(mgnt, n):
+    """
+    Takes in a magnetogram and n value and returns a dictionary of block indices.
+
+    The magnetogram must have heliographic information stored (lonh and lath).
+
+    """
+    try:
+        mgnt.lonhShift[mgnt.rg > mgnt.rsun*np.sin(85.0*np.pi/180)] = np.nan
+    except AttributeError:
+        mgnt.lonh[mgnt.rg > mgnt.rsun*np.sin(85.0*np.pi/180)] = np.nan
     #Split magnetogram up into bands bounded by latitude
-    mgnt.lonhShift[mgnt.rg > mgnt.rsun*np.sin(85.0*np.pi/180)] = np.nan
     bandLats = split(n)
     bandInd = get_latBand_indices(mgnt, bandLats)
     bands = {'ind': bandInd, 'lat': bandLats}
@@ -171,13 +199,14 @@ def fragment(mgnt, n):
     return blocks
 
 def split(n, minimum=-90, maximum=90):
+    """Returns an interval space of latitudes/longitudes based on n number of blocks."""
     return np.linspace(minimum, maximum, n + 1)
 
 def get_latBand_indices(mgnt, bandLats):
+    """"""
     ind_dict = {}
     for i in range(len(bandLats) - 1):
         ind_dict[i] = np.where((mgnt.lath > bandLats[i]) & (mgnt.lath < bandLats[i+1]))
-        #print("{}: Number of pixels = {}".format(i, np.size(ind_dict[i])))
 
     return ind_dict
 
@@ -218,6 +247,7 @@ def split_latitude_bands(mgnt, bandLats, bandInd=None):
     return blocks
 
 def calculate_param_from_block(mgnt, blocks):
+    """Reads in a block dictionary, calculates new indices of mgnt from intervals."""
     bandLats = blocks['lat']
     blocks2 = copy.deepcopy(blocks)
     for bandnum, band in blocks2['bands'].items():
@@ -226,12 +256,14 @@ def calculate_param_from_block(mgnt, blocks):
     return blocks2
 
 def block_area(mgnt, blocks):
+    """Based on a block dictionary, will calculate and print out areas."""
     for keyi in blocks['bands'].keys():
         for keyj, indices in blocks['bands'][keyi]['ind'].items():
             print(M.nansum(mgnt.area[indices]))
 
 
 def block_plot(mgnt, blocks):
+    """Based on a block dictionary, will plot a nice image of the blocks."""
     im = mgnt.lonhShift.v
     c = 0
     for keyi in blocks['bands'].keys():
