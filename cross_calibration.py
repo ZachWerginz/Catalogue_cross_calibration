@@ -21,15 +21,39 @@ i1 = None       #Instrument 1
 i2 = None       #Instrument 2
 date = None     #Date to be examined
 
-class block(Object):
+class Block:
 
-    def __init(self, bounds, indices):
+    def __init__(self, mgnt, latitude_bounds, longitude_bounds):
         """Accepts heliographic bounds and a list of indices for block """
-        self.bounds = bounds
-        self.indices = indices
+        self.mgnt = mgnt
+        self.lat = latitude_bounds
+        self.lon = longitude_bounds
+        self.indices = self.calculate_indices()
 
     def min_latitude(self):
-        return bounds
+        return min(self.lat)
+
+    def max_latitude(self):
+        return max(self.lat)
+
+    def min_longitude(self):
+        return min(self.lon)
+
+    def max_longitude(self):
+        return max(self.lon)
+
+    def calculate_indices(self):
+        m = self.mgnt
+        return np.where((m.lath.v > self.min_latitude()) 
+                & (m.lath.v < self.max_latitude())
+                & (m.lonh.v > self.min_longitude()) 
+                & (m.lonh.v < self.max_longitude()))
+    def mean_field(self):
+        return M.nanmean(self.mgnt.im_raw_u[self.indices])
+    def sum_flux(self):
+        return M.nansum(self.mgnt.mflux_corr[self.indices])
+    def sum_area(self):
+        return M.nansum(self.mgnt.area[self.indices])
 
 
 def usage():
@@ -161,6 +185,8 @@ def fix_longitude(f1, f2):
     m2 = CRD(f2)
     m1.heliographic()
     m2.heliographic()
+    m1.magnetic_flux()
+    m2.magnetic_flux()
     #Apply differential Rotation
     rotation = z.diff_rot(m1, m2)
     m2.lonhRot = rotation.value + m2.lonh
@@ -184,119 +210,135 @@ def fragment(mgnt, n):
     The magnetogram must have heliographic information stored (lonh and lath).
 
     """
-    try:
-        mgnt.lonhShift[mgnt.rg > mgnt.rsun*np.sin(85.0*np.pi/180)] = np.nan
-    except AttributeError:
-        mgnt.lonh[mgnt.rg > mgnt.rsun*np.sin(85.0*np.pi/180)] = np.nan
+    mgnt.lonh[mgnt.rg > mgnt.rsun*np.sin(85.0*np.pi/180)] = np.nan
+
     #Split magnetogram up into bands bounded by latitude
-    bandLats = split(n)
-    bandInd = get_latBand_indices(mgnt, bandLats)
-    bands = {'ind': bandInd, 'lat': bandLats}
+    bands = split(n)
+    print(bands)
+
     #Now split magnetogram up further into blocks bounded by
     #latitude and longitude
-    blocks = split_latitude_bands(mgnt, bands['lat'], bands['ind'])
-    blocks['lat'] = bandLats
+    blocks = calculate_blocks(mgnt, bands, n)
     return blocks
 
 def split(n, minimum=-90, maximum=90):
     """Returns an interval space of latitudes/longitudes based on n number of blocks."""
     return np.linspace(minimum, maximum, n + 1)
 
-def get_latBand_indices(mgnt, bandLats):
-    """"""
-    ind_dict = {}
-    for i in range(len(bandLats) - 1):
-        ind_dict[i] = np.where((mgnt.lath > bandLats[i]) & (mgnt.lath < bandLats[i+1]))
-
-    return ind_dict
-
-def get_lonBand_indices(mgnt, minLat, maxLat, lonBand):
-    ind_dict = {}
-    for i in range(len(lonBand) - 1):
-        ind_dict[i] = np.where((mgnt.lath > minLat) & (mgnt.lath < maxLat)& (mgnt.lonh > lonBand[i]) & (mgnt.lonh < lonBand[i+1]))
-
-    return ind_dict
-
-def split_latitude_bands(mgnt, bandLats, bandInd=None):
-    blocks = {'bands': {}, 'lat': {} }
-    blockBands = {}
-
-    if bandInd is None:
-        bandInd = get_latBand_indices(mgnt, bandLats)
-
-    k = len(bandInd)
-    print(k)
-    for bandNum, indices in bandInd.items():
-        blockBands[bandNum] = {}
-        if np.size(indices) == 0:
-            blockBands[bandNum] = np.array([])
-            continue 
-        minLat = M.nanmin(mgnt.lath[indices])
-        maxLat = M.nanmax(mgnt.lath[indices])
-        print((minLat + maxLat)/2)
-        print(M.cos((minLat + maxLat)*np.pi/360))
-        new_n = np.round(k*abs(M.cos((minLat + maxLat)*np.pi/360)))
-        if new_n < 1: new_n = 1
+def calculate_blocks(mgnt, bands, n):
+    blocks = []
+    for lat in range(len(bands) - 1):
+        minLat = bands[lat]
+        maxLat = bands[lat + 1]
+        new_n = np.round(n*abs(M.cos((minLat + maxLat)*np.pi/360)))
         print(new_n)
-        lonBand = split(new_n ,M.nanmin(mgnt.lonh[indices]), M.nanmax(mgnt.lonh[indices]))
+        if new_n < 1: new_n = 1
+        ind = np.where((mgnt.lath < maxLat) & (mgnt.lath > minLat))
+        if np.size(ind) == 0: continue
+        lonBand = split(new_n, M.nanmin(mgnt.lonh[ind]), M.nanmax(mgnt.lonh[ind]))
         print(lonBand)
-        blockBands[bandNum] = {'ind': get_lonBand_indices(mgnt, minLat, maxLat, lonBand), 'lonbands': lonBand}
-
-    blocks['bands'] = blockBands
+        for lon in range(len(lonBand) - 1):
+            minLon = lonBand[lon]
+            maxLon = lonBand[lon + 1]
+            blocks.append(Block(mgnt, (minLat, maxLat), (minLon, maxLon)))
 
     return blocks
 
 def calculate_param_from_block(mgnt, blocks):
-    """Reads in a block dictionary, calculates new indices of mgnt from intervals."""
-    bandLats = blocks['lat']
-    blocks2 = copy.deepcopy(blocks)
-    for bandnum, band in blocks2['bands'].items():
-        blocks2['bands'][bandnum]['ind'] = get_lonBand_indices(mgnt, blocks2['lat'][bandnum], blocks2['lat'][bandnum + 1] , blocks2['bands'][bandnum]['lonbands'])
-
+    """Reads in a list of blocks, returns list of new blocks for other mgnt."""
+    blocks2 = []
+    for block in blocks:
+        blocks2.append(Block(mgnt, block.lat, block.lon))
     return blocks2
 
 def block_area(mgnt, blocks):
-    """Based on a block dictionary, will calculate and print out areas."""
-    for keyi in blocks['bands'].keys():
-        for keyj, indices in blocks['bands'][keyi]['ind'].items():
-            print(M.nansum(mgnt.area[indices]))
+    """Given a list of blocks, will calculate and print out areas."""
+    areas = []
+    for block in blocks:
+        try:
+            areas.append(M.nansum(mgnt.area[block.indices]))
+        except:
+            areas.append(M(np.nan, np.nan))
 
+    return areas
+
+def block_field(mgnt, blocks, raw=False):
+    """Given a list of blocks, will calculate and print out areas."""
+    field = []
+    for block in blocks:
+        try:
+            field.append(np.nanmean(mgnt.im_raw.data[block.indices]))
+        except:
+            field.append(M(np.nan, np.nan))
+    return field
+
+def block_flux(mgnt, blocks):
+    """Given a list of blocks, will calculate and print out areas."""
+    flux = []
+    for block in blocks:
+        try:
+            flux.append(M.nansum(mgnt.mflux_corr[block.indices]))
+        except:
+            flux.append(M(np.nan, np.nan))
+
+    return flux
 
 def block_plot(mgnt, blocks):
-    """Based on a block dictionary, will plot a nice image of the blocks."""
-    im = mgnt.lonhShift.v
+    """Given a list of blocks, will plot a nice image differentiating them."""
+    im = mgnt.lonh.v.copy()
     c = 0
-    for keyi in blocks['bands'].keys():
+    for block in blocks:
         try:
-            for keyj, indices in blocks['bands'][keyi]['ind'].items():
-                try:
-                    im[indices] = c
-                except:
-                    continue
-                finally:
-                    c += 1
+            im[block.indices] = c
+            c += 1
         except:
             continue
+        finally:
+            print(block.lat)
+            print(block.lon)
 
     plt.imshow(im, cmap='prism', vmin=0, vmax=M.nanmax(im))
     plt.show()
 
+def scatter_plot(dict1, dict2, separate=False):
+    i = 1
+    for n in sorted([x for x in dict1.keys() if x != 'instr']):
+        if separate:
+            plt.subplot(len(dict1), 1, i)
+            plt.xlabel(dict1['instr'])
+            plt.ylabel(dict2['instr'])
+            plt.title('Number of blocks: {}'.format(n))
+        plt.plot([np.nanmin(dict1[n]),np.nanmax(dict1[n])],[np.nanmin(dict1[n]),np.nanmax(dict1[n])], 'k-', lw=2)
+        plt.plot(dict1[n], dict2[n], '.')
+        i += 1
+    plt.show()
+
+def create_ar_fl(m, block):
+    ar = {}
+    flx = {}
+    f = {}
+    for key, value in block.items():
+        ar[key] = [x.v for x in c.block_area(m, value)]
+        flx[key] = [x.v for x in c.block_flux(m, value)]
+        f[key] = [x.v for x in c.block_field(m, value)]
+    ar['instr'] = m.im_raw.instrument
+    flx['instr'] = m.im_raw.instrument
+    f['instr'] = m.im_raw.instrument
+    return ar, flx, f
+
 def main():
     global i1, i2
     parse_args()
-    print(i1)
-    print(i2)
-    print(date)
-    if    i1 == None:    i1 = input('Enter first instrument: ')
-    if    i2 == None:    i2 = input('Enter second instrument: ')
-    # if date is not None:
-    #     return process_date(i1, i2, date)
-    # else:
-    #     return process_instruments(i1, i2)
-    instrumentInfo = coordinate_compare(i1, i2)
-    print(instrumentInfo)
-    df = pd.DataFrame(instrumentInfo, columns=instrumentInfo[0].keys())
-    df.to_csv('test')
+    files = process_instruments('512', 'spmg')
+    m1, m2 = fix_longitude(files[0][0], files[0][1])
+    block1_dict = {}
+    block2_dict = {}
+    for n in [10, 30, 100]:
+        block1_dict[n] = fragment(m1, n)
+        block2_dict[n] = calculate_param_from_block(m2, block1_dict[n])
+
+    return m1, m2, block1_dict, block2_dict
+
 
 
 if __name__ == "__main__":
