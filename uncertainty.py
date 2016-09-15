@@ -205,6 +205,12 @@ class Measurement:
         except AttributeError:
             return np.isfinite(array)
 
+    def isnan(array):
+        try:
+            return np.isnan(array.v)
+        except AttributeError:
+            return np.isnan(array)
+
     def nanmax(array):
         try:
             return np.nanmax(array.v)
