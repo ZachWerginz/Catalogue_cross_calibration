@@ -16,7 +16,6 @@ import getopt
 import sys
 import copy
 
-
 i1 = None       #Instrument 1
 i2 = None       #Instrument 2
 date = None     #Date to be examined
@@ -206,14 +205,17 @@ def fragment(mgnt, n, latBands=None, lonBands=None):
     The magnetogram must have heliographic information stored (lonh and lath).
 
     """
+    print("Processing {}".format(n))
     mgnt.lonh[mgnt.rg > mgnt.rsun*np.sin(85.0*np.pi/180)] = np.nan
     mgnt.lath[mgnt.rg > mgnt.rsun*np.sin(85.0*np.pi/180)] = np.nan
     flatten(mgnt)
 
+    # This supports reusing latitude and longitude bands for other mgnts.
     if latBands is None:
         latBands = split(n)
     if lonBands is None:
         lonBands = split(n, M.nanmin(mgnt.lonh), M.nanmax(mgnt.lonh))
+
     lonMasks = []
     full = []
 
@@ -223,18 +225,18 @@ def fragment(mgnt, n, latBands=None, lonBands=None):
     length = int(mgnt.im_raw.dimensions[0].value)
 
     currLat = (mgnt.lath_1d > latBands[0])
+    ##########################################################################
+    #                         Main Fragmentation Loop                        #
+    ##########################################################################
     for i in range(n):
-        print("Processing latitude Band: ", i)
         nextLat = (mgnt.lath_1d > latBands[i + 1])
         latitudeSetDiff = currLat*~nextLat
         if ~(latitudeSetDiff.any()):
             continue
-        #TODO FUNCTIONALIZE
         latBounds = (latBands[i], latBands[i + 1])
         areaRatio = calc_area_ratio(latBands, lonBands, latBounds)
         minLon = np.nanmin(mgnt.lonh_1d[latitudeSetDiff])
         maxLon = np.nanmax(mgnt.lonh_1d[latitudeSetDiff])
-        ar = []
         s = max(np.searchsorted(lonBands, minLon) - 1, 0)
         e = np.searchsorted(lonBands, maxLon)
         skip = int(round(areaRatio))
@@ -247,12 +249,13 @@ def fragment(mgnt, n, latBands=None, lonBands=None):
                 if ~(block.any()):
                     pass
                 else:
-                    ar.append(mgnt.ind_1d[block])
+                    full.append(mgnt.ind_1d[block])
         currLat = nextLat
-        full.append(ar)
 
-    blockList = [Block(mgnt, transform_indices(x, length)) for y in full for x in y]
-    return blockList
+    # Do some post-processing to block data such as transforming indices. 
+    blockList = [Block(mgnt, transform_indices(x, length)) for x in full]
+    bands = (latBands, lonBands)
+    return blockList, bands
 
 def split(n, minimum=-90, maximum=90):
     """Returns an interval space based on n number of blocks."""
@@ -275,6 +278,15 @@ def flatten(m):
     m.lath_1d = m.lath_1d[ind]
 
 def calc_area_ratio(latBands, lonBands, latBounds):
+    """
+    Calculates the area ratio of the given latitude band.
+
+    The middle square solid angle is the centermost block of the sun.
+    This is used for reference because arguably it is the biggest block given
+    certain lat/lon bounds. This is used in skipping n values for a more
+    comprehensive approach to enlarging the blocks near the poles for area
+    similarities.
+    """
     n = len(latBands) - 1
     lonBlockDiff = lonBands[n//2 + 1] - lonBands[n//2] 
 
@@ -285,16 +297,19 @@ def calc_area_ratio(latBands, lonBands, latBounds):
     return areaRatio
 
 def transform_indices(ind, l):
+    """Takes a 1D list of indices and calculates a 2D list of indices."""
+
     cols = ind % l
     rows = ind // l
     return (rows, cols)
 
 def block_area(mgnt, blocks):
     """Given a list of blocks, will calculate and print out areas."""
+
     areas = []
     for block in blocks:
         try:
-            areas.append(M.nansum(mgnt.area[block.indices]))
+            areas.append(block.sum_area())
         except:
             areas.append(M(np.nan, np.nan))
 
@@ -302,20 +317,22 @@ def block_area(mgnt, blocks):
 
 def block_field(mgnt, blocks, raw=False):
     """Given a list of blocks, will calculate and print out areas."""
+
     field = []
     for block in blocks:
         try:
-            field.append(np.nanmean(mgnt.im_raw.data[block.indices]))
+            field.append(block.mean_field())
         except:
             field.append(M(np.nan, np.nan))
     return field
 
 def block_flux(mgnt, blocks):
     """Given a list of blocks, will calculate and print out areas."""
+
     flux = []
     for block in blocks:
         try:
-            flux.append(M.nansum(mgnt.mflux_corr[block.indices]))
+            flux.append(block.sum_flux())
         except:
             flux.append(M(np.nan, np.nan))
 
@@ -324,26 +341,18 @@ def block_flux(mgnt, blocks):
 def block_plot(mgnt, blocks):
     """Given a list of blocks, will plot a nice image differentiating them."""
     im = mgnt.lonh.v.copy()
-    c = 0
     for block in blocks:
         try:
-            im[block.indices] = c
-            c += 1
+            im[block.indices] = random.random()
         except:
             continue
-        finally:
-            print(block.lat)
-            print(block.lon)
 
-    plt.imshow(im, cmap='prism', vmin=0, vmax=M.nanmax(im))
+    plt.imshow(im, vmin=0, vmax=1.0)
     plt.show()
 
 def run_multiple_n(m):
-    #nList = [i*10 for i in range(1, 11)]
-    #nList.extend(i*100 for i in range(2, 11))
-    #nList.extend(i*100 for i in range(12, 21, 2))
-    #nList.extend(i*100 for i in range(24, 41, 4))
-    nList = [i for i in range(10,400, 10)]
+    nList = [i for i in range(10, 3100, 100)]
+
     n_dict = {}
 
     for n in nList:
@@ -363,14 +372,14 @@ def scatter_plot(dict1, dict2, separate=False):
         i += 1
     plt.show()
 
-def create_ar_fl(m, block):
+def calc_list_parameters(m, block):
     ar = {}
     flx = {}
     f = {}
     for key, value in block.items():
-        ar[key] = [x.v for x in c.block_area(m, value)]
-        flx[key] = [x.v for x in c.block_flux(m, value)]
-        f[key] = [x for x in c.block_field(m, value)]
+        ar[key] = [x.v for x in block_area(m, value)]
+        flx[key] = [x.v for x in block_flux(m, value)]
+        f[key] = [x for x in block_field(m, value)]
     ar['instr'] = m.im_raw.instrument
     flx['instr'] = m.im_raw.instrument
     f['instr'] = m.im_raw.instrument
@@ -394,7 +403,7 @@ def main():
     files = process_instruments('spmg', 'mdi')
     m1, m2 = fix_longitude(files[0][0], files[0][1])
 
-    n_dict_mdi = run_multiple_n(m2)
+    n_dict_mdi = run_multiple_n(m1)
 
     return m1, m2, n_dict_mdi
 

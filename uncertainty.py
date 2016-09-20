@@ -26,6 +26,7 @@ class Measurement:
 
     def u(self):
         return self.u
+
     def __len__(self):
         return len(self.v)
 
