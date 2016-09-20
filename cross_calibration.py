@@ -11,6 +11,7 @@ import itertools
 from uncertainty import Measurement as M
 from astropy import units as u
 from astropy.io import fits
+import random
 import sunpy.time
 import getopt
 import sys
@@ -22,10 +23,11 @@ date = None     #Date to be examined
 
 class Block:
 
-    def __init__(self, mgnt, indices):
+    def __init__(self, mgnt, indices, ID):
         """Accepts heliographic bounds and a list of indices for block """
         self.mgnt = mgnt
         self.indices = indices
+        self.id = ID
         self.lat = (self.min_latitude(), self.max_latitude())
         self.lon = (self.min_longitude(), self.max_longitude())
 
@@ -198,64 +200,131 @@ def fix_longitude(f1, f2):
 
     return m1, m2
 
-def fragment(mgnt, n, latBands=None, lonBands=None):
+def fragment_single(mgnt, n):
     """
     Takes in a magnetogram and n value and returns a list of block objects.
 
     The magnetogram must have heliographic information stored (lonh and lath).
-
     """
     print("Processing {}".format(n))
-    mgnt.lonh[mgnt.rg > mgnt.rsun*np.sin(85.0*np.pi/180)] = np.nan
-    mgnt.lath[mgnt.rg > mgnt.rsun*np.sin(85.0*np.pi/180)] = np.nan
-    flatten(mgnt)
+    fragInfo = get_fragmentation_info(mgnt, n)
+    return fragmentation_loop(fragInfo)
+
+def fragment_multiple(m1, m2, n):
+    """
+    Takes in two magnetograms and n value and returns a list of block objects.
+
+    The magnetograms must have heliographic information stored (lonh and lath).
+
+    """
+    if m1.X0 < m2.X0:
+        refmgnt = m1
+        secmgnt = m2
+    else:
+        refmgnt = m2
+        secmgnt = m1
+    print("Processing {}".format(n))
+    refFragInfo = get_fragmentation_info(refmgnt, n)
+    secFragInfo = get_fragmentation_info(secmgnt, n, refFragInfo['lonBands'])
+    refBlocks, secBlocks = fragmentation_loop(refFragInfo, secFragInfo)
+    
+    return refBlocks, secBlocks
+
+def get_fragmentation_info(m, n, lonBands=None):
+    m.lonh[m.rg > m.rsun*np.sin(85.0*np.pi/180)] = np.nan
+    m.lath[m.rg > m.rsun*np.sin(85.0*np.pi/180)] = np.nan
+    flatten(m)
 
     # This supports reusing latitude and longitude bands for other mgnts.
-    if latBands is None:
-        latBands = split(n)
+    latBands = split(n)
     if lonBands is None:
-        lonBands = split(n, M.nanmin(mgnt.lonh), M.nanmax(mgnt.lonh))
-
+        lonBands = split(n, M.nanmin(m.lonh), M.nanmax(m.lonh))
     lonMasks = []
-    full = []
 
     for lon in lonBands:
-        lonMasks.append(mgnt.lonh_1d > lon)
+        lonMasks.append(m.lonh_1d > lon)
 
-    length = int(mgnt.im_raw.dimensions[0].value)
+    fragInfo = {'mgnt': m, 'latBands': latBands, 'lonBands': lonBands, 
+            'lonMasks': lonMasks}
+    return fragInfo
+
+def fragmentation_loop(refFragInfo, secFragInfo=None):
+    """
+    The main loop that finds valid indices for lat/lon conditions.
+
+    Input a dictionary of information for a single magnetogram, or
+    two if you want to compare two with the same heliographic bounds.
+    This dictionary must have the following valid keys:
+
+    mgnt: The magnetogram with flattened indices and heliographic information.
+    latBands: The interval space of latitudes to be used.
+    lonBands: The interval space of longitudes to be used.
+    lonMasks: The list of boolean masks for valid indices over lonBand space.
+    """
+    blocks = []
+    mgnt = refFragInfo['mgnt']
+    latBands = refFragInfo['latBands']
+    lonBands = refFragInfo['lonBands']
+    lonMasks = refFragInfo['lonMasks']
+    l = int(mgnt.im_raw.dimensions[0].value)
+    n = len(lonBands) - 1
+
+    if secFragInfo is not None:
+        secBlocks = []
+        secmgnt = secFragInfo['mgnt']
+        secLatBands = secFragInfo['latBands']
+        secLonBands = secFragInfo['lonBands']
+        secLonMasks = secFragInfo['lonMasks']
+        secCurrLat = (secmgnt.lath_1d > latBands[0])
+        secL = int(secmgnt.im_raw.dimensions[0].value)
 
     currLat = (mgnt.lath_1d > latBands[0])
-    ##########################################################################
-    #                         Main Fragmentation Loop                        #
-    ##########################################################################
     for i in range(n):
         nextLat = (mgnt.lath_1d > latBands[i + 1])
         latitudeSetDiff = currLat*~nextLat
         if ~(latitudeSetDiff.any()):
             continue
-        latBounds = (latBands[i], latBands[i + 1])
-        areaRatio = calc_area_ratio(latBands, lonBands, latBounds)
         minLon = np.nanmin(mgnt.lonh_1d[latitudeSetDiff])
         maxLon = np.nanmax(mgnt.lonh_1d[latitudeSetDiff])
+
+        latBounds = (latBands[i], latBands[i + 1])
+        areaRatio = calc_area_ratio(latBands, lonBands, latBounds)
         s = max(np.searchsorted(lonBands, minLon) - 1, 0)
         e = np.searchsorted(lonBands, maxLon)
         skip = int(round(areaRatio))
-        for j in range(s, e, skip):
-            try:
-                block = lonMasks[j]*~lonMasks[j+skip]*latitudeSetDiff
-            except:
-                block = lonMasks[j]*~lonMasks[-1]*latitudeSetDiff
-            finally:
-                if ~(block.any()):
-                    pass
-                else:
-                    full.append(mgnt.ind_1d[block])
-        currLat = nextLat
 
-    # Do some post-processing to block data such as transforming indices. 
-    blockList = [Block(mgnt, transform_indices(x, length)) for x in full]
-    bands = (latBands, lonBands)
-    return blockList, bands
+        if secFragInfo is not None:
+            secNextLat = (secmgnt.lath_1d > latBands[i + 1])
+            secLatitudeSetDiff = secCurrLat*~secNextLat
+
+        for j in range(s, e, skip):
+            uuid = str(i) + str(j) + str(n)
+            try:
+                blockBool = lonMasks[j]*~lonMasks[j+skip]*latitudeSetDiff
+            except IndexError:
+                blockBool = lonMasks[j]*~lonMasks[-1]*latitudeSetDiff
+            blockInd = transform_indices(mgnt.ind_1d[blockBool], l)
+            x = Block(mgnt, blockInd, uuid)
+            if ~(blockBool.any()):
+                continue
+            else:
+                blocks.append(x)
+            if secFragInfo is not None:
+                try:
+                    secBlockBool = secLonMasks[j]*~secLonMasks[j+skip]*secLatitudeSetDiff
+                except IndexError:
+                    secBlockBool = secLonMasks[j]*~secLonMasks[-1]*secLatitudeSetDiff
+                secblockInd = transform_indices(secmgnt.ind_1d[secBlockBool], secL)
+                y = Block(secmgnt, blockInd, uuid)
+                secBlocks.append(y)
+        currLat = nextLat
+        if secFragInfo is not None:
+            secCurrLat = secNextLat
+
+    if secFragInfo is not None:
+        return blocks, secBlocks
+    else:
+        return blocks
 
 def split(n, minimum=-90, maximum=90):
     """Returns an interval space based on n number of blocks."""
@@ -338,12 +407,12 @@ def block_flux(mgnt, blocks):
 
     return flux
 
-def block_plot(mgnt, blocks):
+def block_plot(*args):
     """Given a list of blocks, will plot a nice image differentiating them."""
     im = mgnt.lonh.v.copy()
-    for block in blocks:
+    for x in blocks:
         try:
-            im[block.indices] = random.random()
+            im[x.indices] = random.random()
         except:
             continue
 
@@ -353,11 +422,12 @@ def block_plot(mgnt, blocks):
 def run_multiple_n(m):
     nList = [i for i in range(10, 3100, 100)]
 
-    n_dict = {}
+    n_dict_length = {}
 
     for n in nList:
-        n_dict[n] = fragment(m, n)
-    return n_dict
+        N, bands = fragment(m, n)
+        n_dict_length[n] = len(N)
+    return 
 
 def scatter_plot(dict1, dict2, separate=False):
     i = 1
@@ -372,17 +442,21 @@ def scatter_plot(dict1, dict2, separate=False):
         i += 1
     plt.show()
 
-def calc_list_parameters(m, block):
+def calc_n_lists(m, block):
     ar = {}
     flx = {}
     f = {}
     for key, value in block.items():
-        ar[key] = [x.v for x in block_area(m, value)]
-        flx[key] = [x.v for x in block_flux(m, value)]
-        f[key] = [x for x in block_field(m, value)]
+        ar[key], flx[key], f[key] = calc_list_parameters(m, value)
     ar['instr'] = m.im_raw.instrument
     flx['instr'] = m.im_raw.instrument
     f['instr'] = m.im_raw.instrument
+    return ar, flx, f
+
+def calc_list_parameters(m, blockList):
+    ar = block_area(m, blockList)
+    flx = block_flux(m, blockList)
+    f = block_field(m, blockList)
     return ar, flx, f
 
 def n_plot(n_dict):
@@ -397,17 +471,36 @@ def n_plot(n_dict):
 
     plt.show()
 
+def plot_instrument_comparisons():
+    pass
+
+def compare_day(i1, i2, n, date=None):
+    if date is None:
+        files = process_instruments(i1, i2)
+    else:
+        date = sunpy.time.parse_time(date)
+        files = process_date(i1, i2, date)
+        prompt = "Enter another date, CTRL-C to cancel: "
+        while files == []:
+            try:
+                date = sunpy.time.parse_time(input(prompt))
+            except KeyboardInterrupt:
+                break
+            files = process_date(i1, i2, date)
+    m1, m2 = fix_longitude(files[0][0], files[0][1])
+    i1_n, bands = fragment(m1, n)
+    i2_n = fragment(m2, n, bands[0], bands[1])[0]
+    ar_i1, flx_i1, f_i1 = calc_list_parameters(m1, i1_n)
+    ar_i2, flx_i2, f_i2 = calc_list_parameters(m2, i2_n)
+
+
 def main():
     global i1, i2
     parse_args()
     files = process_instruments('spmg', 'mdi')
     m1, m2 = fix_longitude(files[0][0], files[0][1])
-
-    n_dict_mdi = run_multiple_n(m1)
-
-    return m1, m2, n_dict_mdi
-
-
+    fragment_multiple(m1, m2, 9)
+    
 
 if __name__ == "__main__":
     main()
