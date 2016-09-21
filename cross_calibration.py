@@ -23,11 +23,12 @@ date = None     #Date to be examined
 
 class Block:
 
-    def __init__(self, mgnt, indices, ID):
+    def __init__(self, mgnt, indices, ID, c=random.random()):
         """Accepts heliographic bounds and a list of indices for block """
         self.mgnt = mgnt
         self.indices = indices
         self.id = ID
+        self.pltColor = c
         self.lat = (self.min_latitude(), self.max_latitude())
         self.lon = (self.min_longitude(), self.max_longitude())
 
@@ -189,14 +190,14 @@ def fix_longitude(f1, f2):
     m2.lonhRot = rotation.value + m2.lonh
 
     #Compare reference pixels
-    x1 = int(np.around(m1.X0))
-    y1 = int(np.around(m1.Y0))
-    x2 = int(np.around(m2.X0))
-    y2 = int(np.around(m2.Y0))
+    # x1 = int(np.around(m1.X0))
+    # y1 = int(np.around(m1.Y0))
+    # x2 = int(np.around(m2.X0))
+    # y2 = int(np.around(m2.Y0))
 
-    lonDelta = m2.lonhRot[x2, y2] - m1.lonh[x1, y1]
-    m2.lonhOld = m2.lonh
-    m2.lonh = m2.lonhRot - lonDelta
+    # lonDelta = m2.lonhRot[x2, y2] - m1.lonh[x1, y1]
+    # m2.lonhOld = m2.lonh
+    # m2.lonh = m2.lonhRot - lonDelta
 
     return m1, m2
 
@@ -303,19 +304,22 @@ def fragmentation_loop(refFragInfo, secFragInfo=None):
                 blockBool = lonMasks[j]*~lonMasks[j+skip]*latitudeSetDiff
             except IndexError:
                 blockBool = lonMasks[j]*~lonMasks[-1]*latitudeSetDiff
-            blockInd = transform_indices(mgnt.ind_1d[blockBool], l)
-            x = Block(mgnt, blockInd, uuid)
             if ~(blockBool.any()):
                 continue
             else:
+                c = random.random()
+                blockInd = transform_indices(mgnt.ind_1d[blockBool], l)
+                x = Block(mgnt, blockInd, uuid, c)
                 blocks.append(x)
             if secFragInfo is not None:
                 try:
                     secBlockBool = secLonMasks[j]*~secLonMasks[j+skip]*secLatitudeSetDiff
                 except IndexError:
                     secBlockBool = secLonMasks[j]*~secLonMasks[-1]*secLatitudeSetDiff
-                secblockInd = transform_indices(secmgnt.ind_1d[secBlockBool], secL)
-                y = Block(secmgnt, blockInd, uuid)
+                if ~(secBlockBool.any()):
+                    continue
+                secBlockInd = transform_indices(secmgnt.ind_1d[secBlockBool], secL)
+                y = Block(secmgnt, secBlockInd, uuid, c)
                 secBlocks.append(y)
         currLat = nextLat
         if secFragInfo is not None:
@@ -409,14 +413,23 @@ def block_flux(mgnt, blocks):
 
 def block_plot(*args):
     """Given a list of blocks, will plot a nice image differentiating them."""
-    im = mgnt.lonh.v.copy()
-    for x in blocks:
-        try:
-            im[x.indices] = random.random()
-        except:
-            continue
-
-    plt.imshow(im, vmin=0, vmax=1.0)
+    n = len(args)
+    rows = int(round(np.sqrt(n)))
+    cols = int(np.ceil(np.sqrt(n)))
+    im = {}
+    ax = {}
+    for i in range(len(args)):
+        if isinstance(args[i], type(list())):
+            im[i] = args[i][0].mgnt.lonh.v.copy()
+            for x in args[i]:
+                im[i][x.indices] = x.pltColor
+            ax[i] = plt.subplot2grid((rows, cols), (i%rows, i//rows))
+            ax[i].imshow(im[i], vmin=0, vmax=1)
+            ax[i].set_title(args[i][0].mgnt.im_raw.date)
+        else:
+            im[i] = args[i]
+            ax[i] = plt.subplot2grid((rows, cols), (i%rows, i//rows))
+            ax[i].imshow(im[i], cmap='binary')
     plt.show()
 
 def run_multiple_n(m):
@@ -425,7 +438,7 @@ def run_multiple_n(m):
     n_dict_length = {}
 
     for n in nList:
-        N, bands = fragment(m, n)
+        N = fragment(m, n)
         n_dict_length[n] = len(N)
     return 
 
