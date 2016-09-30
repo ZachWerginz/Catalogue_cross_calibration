@@ -35,6 +35,7 @@ class CRD:
             self.Y0 = self.im_raw.meta['CRPIX2A']
             self.B0 = M(self.im_raw.meta['B0'], np.abs(self.im_raw.meta['B0'])*.01)
             self.L0 = M(self.im_raw.meta['L0'], np.abs(self.im_raw.meta['L0'])*.01)
+            self.SL0 = M(0, 0)
             self.xScale = M(self.im_raw.scale[0].value, 0.002)
             self.yScale = M(self.im_raw.scale[1].value, 0.002)
             self.rsun = M(self.im_raw.rsun_obs.value, 1)
@@ -47,46 +48,47 @@ class CRD:
             self.Y0 = self.im_raw.meta['CRPIX2A']
             self.B0 = M(self.im_raw.meta['B0'], np.abs(self.im_raw.meta['B0'])*.01)
             self.L0 = M(self.im_raw.meta['L0'], np.abs(self.im_raw.meta['L0'])*.01)
+            self.SL0 = M(0, 0)
             self.xScale = M(self.im_raw.scale[0].value, 0)
             self.yScale = M(self.im_raw.scale[1].value, 0)
             self.rsun = M(self.im_raw.rsun_obs.value, 1)
             self.dsun = self.DSUN_METERS
 
         elif self.im_raw.detector == 'MDI':
-
-            # Define center of sun and location of detector.
-            self.X0 = self.im_raw.meta['X0']
-            self.Y0 = self.im_raw.meta['Y0']
-            try:
-                self.B0 = M(self.im_raw.meta['B0'], np.abs(self.im_raw.meta['B0'])*.01)
-                self.L0 = M(self.im_raw.meta['L0'], np.abs(self.im_raw.meta['L0'])*.01)
-            except KeyError:
-                self.B0 = M(self.im_raw.meta['OBS_B0'], np.abs(self.im_raw.meta['OBS_B0'])*.01)
-                self.L0 = M(self.im_raw.meta['OBS_L0'], np.abs(self.im_raw.meta['OBS_L0'])*.01)
-            self.xScale = M(1.982, 0.003)
-            self.yScale = M(1.982, 0.003)
             self.rsun = M(self.im_raw.rsun_obs.value, 1)
             self.dsun = M(self.im_raw.dsun.value, 0)
             try:
                 self.P0 = self.im_raw.meta['p_angle']
             except KeyError:
                 self.P0 = self.im_raw.meta['solar_p']
-
             if self.P0 != 0:
-                self.im_raw = self.im_raw.rotate(angle=self.P0*u.deg)
+                self.im_raw = self.im_raw.rotate(angle=-self.P0*u.deg)
+            # Define center of sun and location of detector.
+            self.X0, self.Y0 = (x.value for x in self.im_raw.reference_pixel)
+            try:
+                self.B0 = M(self.im_raw.meta['B0'], np.abs(self.im_raw.meta['B0'])*.01)
+                self.L0 = M(self.im_raw.meta['L0'], np.abs(self.im_raw.meta['L0'])*.01)
+            except KeyError:
+                self.B0 = M(self.im_raw.meta['OBS_B0'], np.abs(self.im_raw.meta['OBS_B0'])*.01)
+                self.L0 = M(self.im_raw.meta['OBS_L0'], np.abs(self.im_raw.meta['OBS_L0'])*.01)
+            self.SL0 = self.L0 - sun.heliographic_solar_center(self.im_raw.date)[0].value
+            self.xScale = M(1.982, 0.003)
+            self.yScale = M(1.982, 0.003)
+            
 
         elif self.im_raw.detector == 'HMI':
-            self.X0 = self.im_raw.meta['CRPIX1']
-            self.Y0 = self.im_raw.meta['CRPIX2']
-            self.B0 = M(self.im_raw.meta['CRLT_OBS'], np.abs(self.im_raw.meta['CRLT_OBS'])*.01)
-            self.L0 = M(self.im_raw.meta['CRLN_OBS'], np.abs(self.im_raw.meta['CRLN_OBS'])*.01)
-            self.xScale = M(self.im_raw.scale[0].value, 0.001)
-            self.yScale = M(self.im_raw.scale[1].value, 0.001)
             self.rsun = M(self.im_raw.rsun_obs.value, 1)
             self.dsun = M(self.im_raw.dsun.value, 0)
             self.P0 = self.im_raw.meta['CROTA2']
             if self.P0 != 0:
                 self.im_raw.rotate(self.P0*u.deg)
+            self.X0, self.Y0 = (x.value for x in self.im_raw.reference_pixel)
+            self.B0 = M(self.im_raw.meta['CRLT_OBS'], np.abs(self.im_raw.meta['CRLT_OBS'])*.01)
+            self.L0 = M(self.im_raw.meta['CRLN_OBS'], np.abs(self.im_raw.meta['CRLN_OBS'])*.01)
+            self.SL0 = self.L0 - sun.heliographic_solar_center(self.im_raw.date)[0].value
+            self.xScale = M(self.im_raw.scale[0].value, 0.001)
+            self.yScale = M(self.im_raw.scale[1].value, 0.001)
+            
 
         else:
             print ("Not a valid instrument or missing header information regarding instrument.")
@@ -139,8 +141,9 @@ class CRD:
         rx, ry, rz = self._hpc_hcc(x, y)
 
         # Now convert to heliographic coordinates.
-        lonh, lath = self._hcc_hg(rx, ry, rz)
+        lonh, lath = self._hcc_hg(rx, ry, rz, self.B0, self.SL0)
 
+        self.im_raw.data[self.rg > self.rsun] = np.nan
         # Only add the instance attribute if it doesn't exist.
         if array and not hasattr(self, 'lonh') and not corners:
             self.lonh = lonh
@@ -169,10 +172,10 @@ class CRD:
             lonh, lath = M.deg2rad(self.heliographic(args[0], args[1]))
 
         B0 = M.deg2rad(self.B0)
-        L0 = M.deg2rad(self.L0)
+        SL0 = M.deg2rad(self.SL0)
 
-        Xobs = M.cos(B0)*M.cos(L0)
-        Yobs = M.cos(B0)*M.sin(L0)
+        Xobs = M.cos(B0)*M.cos(SL0)
+        Yobs = M.cos(B0)*M.sin(SL0)
         Zobs = M.sin(B0)
 
         corr_factor = (M.cos(lath)*M.cos(lonh)*Xobs
@@ -339,7 +342,7 @@ class CRD:
 
         return rx, ry, rz
 
-    def _hcc_hg(self, x, y, z):
+    def _hcc_hg(self, x, y, z, B0=0, L0=0):
         """Converts hcc coordinates to Stonyhurst heliographic. 
 
         x - x coordinate in meters
@@ -348,12 +351,12 @@ class CRD:
         Calculations taken and shortened
         from sunpy.wcs.
         """
-        cosb = M.cos(M.deg2rad(self.B0))
-        sinb = M.sin(M.deg2rad(self.B0))
+        cosb = M.cos(M.deg2rad(B0))
+        sinb = M.sin(M.deg2rad(B0))
 
         hecr = M.sqrt(x**2 + y**2 + z**2)
         hgln = M.arctan2(x, z*cosb - y*sinb) \
-                + M.deg2rad(self.L0)
+                + M.deg2rad(L0)
         hglt = M.arcsin((y * cosb + z * sinb)/hecr)
 
         return hgln*180/np.pi, hglt*180/np.pi
