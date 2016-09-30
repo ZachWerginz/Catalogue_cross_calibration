@@ -162,9 +162,8 @@ def diff_rot(m1, m2):
 
     Returns the rotation amount in degrees.
     """
-
     timeDiff = u.Quantity(
             (m1.im_raw.date - m2.im_raw.date).total_seconds(), 'second')
-    rotation = d.diff_rot(timeDiff, m2.lath.v*u.deg, rot_type='snodgrass', frame_time='synoptic')
+    rotation = d.diff_rot(timeDiff, m2.lath.v*u.deg, rot_type='snodgrass', frame_time='synodic')
 
     return rotation
