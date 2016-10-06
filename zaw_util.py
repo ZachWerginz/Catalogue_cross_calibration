@@ -6,7 +6,11 @@ import pandas as pd
 from astropy.io import fits
 import astropy.units as u
 from zaw_coord import CRD
+import sunpy.time
 import sunpy.physics.differential_rotation as d
+
+__authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
+__email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
 
 data_root = 'H:'
 debug = False
@@ -93,6 +97,9 @@ def CRD_read(date, instr):
     return mgnt
 
 def search_file(date, instr, auto=True):
+    if not isinstance(date, dt.datetime):
+        date = sunpy.time.parse_time(date)
+
     # Set defaults
     subdir = ''
     fn0 = instr.upper()

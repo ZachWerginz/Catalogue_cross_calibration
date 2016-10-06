@@ -1,13 +1,16 @@
-__authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
-__email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
-
+from __future__ import division
 import numpy as np
 import sunpy.map
 from sunpy.sun import constants
 from sunpy.sun import sun
-from uncertainty import Measurement as M
 import astropy.units as u
+
 import kpvt_class
+from uncertainty import Measurement as M
+
+__authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
+__email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
+
 
 class CRD:
     """Calculates various magnetogram coordinate information.
@@ -17,7 +20,6 @@ class CRD:
     be done for one pixel, or the whole data map. If the whole
     data map is given as a parameter, it will save the information
     as an instance attribute for the object.
-
     """
 
     RSUN_METERS = M(sun.constants.radius.si.value, 26000)

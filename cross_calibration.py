@@ -1,6 +1,7 @@
-# This is a script that is meant to look for magnetograms across instruments
-# that are close in time and blocks them into latitude/longitude areas.
-
+"""
+Provides the functions necessary for analyzing cross calibration
+between instruments.
+"""
 import zaw_util as z
 from zaw_coord import CRD
 import quadrangles as quad
@@ -16,15 +17,20 @@ import sunpy.time
 import getopt
 import sys
 
+__authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
+__email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
+
+
 i1 = None       #Instrument 1
 i2 = None       #Instrument 2
 date = None     #Date to be examined
-tol = 1      #Time difference tolerance
+tol = 1         #Time difference tolerance
 
 def usage():
     print('Usage: cross_calibration.py [-d data-root] [-f instrument 1] [-s instrument 2] [-i date] [-t tolerance]')
 
 def parse_args():
+    """Sets global variables for scripting purposes."""
     global i1, i2, date, tol
 
     try:
@@ -52,6 +58,7 @@ def parse_args():
             assert False, "unhandled option"
 
 def process_date(i1, i2, date, timeTolerance=1):
+    """Inputs two instruments and returns unique list of dates for a date."""
     fList1 = []
     fList2 = []
 
@@ -75,9 +82,13 @@ def process_date(i1, i2, date, timeTolerance=1):
     return result
 
 def process_instruments(i1, i2, retDates=False, timeTolerance=1):
-    """Returns a list of valid file combinations.
+    """
+    Returns a list of valid file combinations.
 
     Searches for files within 24 hours of each other between instruments.
+    This time default can be changed with the timeTolerance keyword.
+    If retDates is set to true, it will also return a list of dates where
+    matches were found.
     """
     if timeTolerance == 1 and retDates:
         return z.load_instrument_overlap(i1, i2)
@@ -116,7 +127,10 @@ def process_instruments(i1, i2, retDates=False, timeTolerance=1):
         return list(set(files))
 
 def coordinate_compare(i1, i2):
-    """A function used to compare two instruments longitude stats."""
+    """
+    A function used to compare two instruments longitude stats.
+
+    Initially used for debugging, but now deprecated."""
     filePairs = process_instruments(i1, i2)
     pairInfo = {}
     infoList = []
@@ -177,6 +191,7 @@ def fix_longitude(f1, f2):
     return m1, m2
 
 def run_multiple_n(m):
+    """Takes mgnt and returns list of different fragmented quadrangles."""
     nList = [i for i in range(10, 3100, 100)]
 
     n_dict_length = {}
@@ -212,6 +227,7 @@ def get_instruments():
     i2 = input("Enter a second instrument: ")
 
 def select_pair():
+    """Guides user through valid date combinations and returns filepaths."""
     files, dates = process_instruments(i1, i2, True, tol)
     print(set([x.year for x in dates]))
     y = input("Choose a year: ")
@@ -229,6 +245,20 @@ def select_pair():
     return files[choice]
 
 def main():
+    """
+    Main loop guiding the user though different cross_calibration
+    visualization options. For each magnetogram pair chosen, the
+    list of quadrangles and their parameters will be added to 
+    bl and p respectively.
+
+    --Options--
+    r [num]:    will choose a random magnetogram num times out of the 
+                instrument overlap
+    s:          user can choose specific date pair
+    i:          allows user to switch instruments
+    h:          will plot all of the p data held thus filePairs
+    e:          exit the program, or return bl and p data if in python.
+    """
     parse_args()
     if i1 is None or i2 is None:
         get_instruments()

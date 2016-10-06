@@ -3,9 +3,14 @@ import matplotlib.pyplot as plt
 import matplotlib
 import copy
 from scipy.optimize import curve_fit
+
+__authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
+__email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
+
 matplotlib.rcParams.update({'font.size': 22})
 
 def add_identity(axes, *line_args, **line_kwargs):
+    """Plots the identity line on the specified axis."""
     identity, = axes.plot([], [], *line_args, **line_kwargs)
     def callback(axes):
         low_x, high_x = axes.get_xlim()
@@ -19,9 +24,11 @@ def add_identity(axes, *line_args, **line_kwargs):
     return axes
 
 def power_law(x, a, b):
+    """Used in fitting the mean fields."""
     return a*(x**b)
 
 def fit_mean_field(axes, p):
+    """Takes all p values and attempts to fit the fields with a power law."""
     xArr = np.array([])
     yArr = np.array([])
     for s in range(len(p)):
@@ -42,6 +49,7 @@ def fit_mean_field(axes, p):
     return x, y
 
 def hist(x, y):
+    """Calculates a 2D histogram and plots it."""
     H, xedges, yedges = np.histogram2d(x, y, bins=100)
     fig = plt.figure(1)
     ax = fig.add_subplot(111)
@@ -51,6 +59,7 @@ def hist(x, y):
 
 
 def scatter_plot(dict1, dict2, separate=False):
+    """Plots different blocked n values. Deprecated."""
     i = 1
     for n in sorted([x for x in dict1.keys() if x != 'instr']):
         if separate:
@@ -64,6 +73,13 @@ def scatter_plot(dict1, dict2, separate=False):
     plt.show()
 
 def plot_block_parameters(*args):
+    """
+    Accepts any number of p-tuples and creates scatter plots.
+
+    p-tuples take the form of (p_i1, p_i2) where the p values
+    for each instrument are calculated from the quadrangles
+    module.
+    """
     f, ax = plt.subplots(1,3, num=1)
     co = 'viridis'
     plt.rc('text', usetex=True)
@@ -122,6 +138,7 @@ def plot_block_parameters(*args):
     return f
 
 def n_plot(n_dict):
+    """Plots a dictionary of n values"""
     NList = []
     TList = []
     for key, value in n_dict.items():
@@ -137,7 +154,7 @@ def block_plot(*args, overlay=True):
     """Given a list of blocks, will plot a nice image differentiating them.
 
     --Optional arguments--
-    overlay: """
+    overlay: Toggle for quadrangles if you want to show over magnetogram."""
     n = len(args)
     print(n)
     rows = int(round(np.sqrt(n)))
