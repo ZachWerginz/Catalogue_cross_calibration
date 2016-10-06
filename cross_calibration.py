@@ -77,8 +77,13 @@ def process_date(i1, i2, date, timeTolerance=1):
 def process_instruments(i1, i2, retDates=False, timeTolerance=1):
     """Returns a list of valid file combinations.
 
-    Searches for files within 48 hours of each other between instruments.
+    Searches for files within 24 hours of each other between instruments.
     """
+    if timeTolerance == 1 and retDates:
+        return z.load_instrument_overlap(i1, i2)
+    elif timeTolerance == 1 and not retDates:
+        return z.load_instrument_overlap(i1, i2)[0]
+
     if i1==i2:
         if i1 in ('512', 'spmg'):
             start_i1, end_i1 = z.date_defaults('512')
@@ -89,9 +94,6 @@ def process_instruments(i1, i2, retDates=False, timeTolerance=1):
         else:
             start_i1, end_i1 = z.date_defaults('mdi')
             start_i2, end_i2 = z.date_defaults('hmi')
-    else:
-        start_i1, end_i1 = z.date_defaults(i1)
-        start_i2, end_i2 = z.date_defaults(i2)
 
     start = max(start_i1, start_i2)
     end = min(end_i1, end_i2)
@@ -202,9 +204,7 @@ def compare_day(i1, i2, n, date=None, f1=None, f2=None):
     p_i1 = quad.calc_block_parameters(m1, i1_n)
     p_i2 = quad.calc_block_parameters(m2, i2_n)
 
-    ax2 = b.block_plot(i1_n, i2_n)
-    ax1 = b.plot_block_parameters(p_i1, p_i2)
-    plt.show()
+    return (i1_n, i2_n), (p_i1, p_i2)
 
 def get_instruments():
     global i1, i2
@@ -233,23 +233,39 @@ def main():
     if i1 is None or i2 is None:
         get_instruments()
 
+    p = []
+    bl = []
+
     while True:
         try:
-            option = input("Choose a function: (r)andom, (s)elect date, switch (i)nstruments: ")
+            option = input("Choose a function: (r)andom [num], (s)elect date, switch (i)nstruments, s(h)ow plots, (e)xit: ")
             if option=='i':
                 get_instruments()
-            elif option=='r':
+            elif 'r' in option:
+                try:
+                    passes = int(option.split()[-1])
+                except ValueError:
+                    passes = 1
                 n = int(input("Enter segmentation level: "))
-                compare_day(i1, i2, n)
-            else:
+                for i in range(passes):
+                    x, y = compare_day(i1, i2, n)
+                    bl.append(x), p.append(y)
+            elif 's' in option:
                 file1, file2 = select_pair()
                 n = int(input("Enter segmentation level: "))
-                compare_day(i1, i2, n, f1=file1, f2=file2)
-        except KeyboardInterrupt:
-            break
+                x, y = compare_day(i1, i2, n, f1=file1, f2=file2)
+                bl.append(x), p.append(y)
+            elif 'h' in option:
+                b.plot_block_parameters(*p)
+                if len(p) == 1:
+                    b.block_plot()
+                plt.show()
+            elif 'e' in option:
+                break
         except Exception as e:
             print(e)
             continue
+    return bl, p
 
 if __name__ == "__main__":
     main()

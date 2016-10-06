@@ -81,7 +81,7 @@ class CRD:
             self.dsun = M(self.im_raw.dsun.value, 0)
             self.P0 = self.im_raw.meta['CROTA2']
             if self.P0 != 0:
-                self.im_raw.rotate(self.P0*u.deg)
+                self.im_raw = self.im_raw.rotate(angle=-self.P0*u.deg)
             self.X0, self.Y0 = (x.value for x in self.im_raw.reference_pixel)
             self.B0 = M(self.im_raw.meta['CRLT_OBS'], np.abs(self.im_raw.meta['CRLT_OBS'])*.01)
             self.L0 = M(self.im_raw.meta['CRLN_OBS'], np.abs(self.im_raw.meta['CRLN_OBS'])*.01)

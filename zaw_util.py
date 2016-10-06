@@ -1,6 +1,8 @@
 import os.path
 import glob
+import pickle
 import datetime as dt
+import pandas as pd
 from astropy.io import fits
 import astropy.units as u
 from zaw_coord import CRD
@@ -20,6 +22,17 @@ def dateOffset(instr):
         year = 1970
     
     return dt.date(year, 1, 1)
+
+def load_instrument_overlap(i1, i2):
+    if i1 in ('512', 'spmg') and i2 in ('512', 'spmg'):
+        fn = 'overlap_files\\512_SPMG_overlap.pkl'
+    elif i1 in ('spmg', 'mdi') and i2 in ('spmg', 'mdi'):
+        fn = 'overlap_files\\SPMG_MDI_overlap.pkl'
+    elif i1 in ('mdi', 'hmi') and i2 in ('mdi', 'hmi'):
+        fn = 'overlap_files\\MDI_HMI_overlap.pkl'
+
+    with open(fn, 'rb') as f:
+        return pickle.load(f)
 
 def date_defaults(instr):
     if instr == '512':
