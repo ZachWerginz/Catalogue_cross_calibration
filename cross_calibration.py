@@ -216,8 +216,8 @@ def compare_day(i1, i2, n, date=None, f1=None, f2=None):
 
     m1, m2 = fix_longitude(files[0], files[1])
     i1_n, i2_n = quad.fragment_multiple(m1, m2, n)
-    p_i1 = quad.calc_block_parameters(m1, i1_n)
-    p_i2 = quad.calc_block_parameters(m2, i2_n)
+    p_i1 = quad.calc_block_parameters(m1, i1_n, uncertainty=True)
+    p_i2 = quad.calc_block_parameters(m2, i2_n, uncertainty=True)
 
     return (i1_n, i2_n), (p_i1, p_i2)
 
@@ -265,6 +265,7 @@ def main():
 
     p = []
     bl = []
+    d = []
 
     while True:
         try:
@@ -279,7 +280,9 @@ def main():
                 n = int(input("Enter segmentation level: "))
                 for i in range(passes):
                     x, y = compare_day(i1, i2, n)
-                    bl.append(x), p.append(y)
+                    #bl.append(x)
+                    d.append((x[0][0].mgnt.im_raw.date, x[1][0].mgnt.im_raw.date))
+                    p.append(y)
             elif 's' in option:
                 file1, file2 = select_pair()
                 n = int(input("Enter segmentation level: "))
@@ -295,7 +298,7 @@ def main():
         except Exception as e:
             print(e)
             continue
-    return bl, p
+    return bl, p, d
 
 if __name__ == "__main__":
     main()
