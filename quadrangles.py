@@ -3,7 +3,14 @@ from uncertainty import Measurement as M
 import numpy as np
 import random
 
+__authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
+__email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
+
+
 class Quadrangle:
+    """
+    Quadrangle(mgnt, indices, ID)
+    """
 
     def __init__(self, mgnt, indices, ID, c=random.random()):
         """Accepts heliographic bounds and a list of indices for block """
@@ -268,10 +275,18 @@ def block_flux(mgnt, blocks):
 
     return flux
 
-def calc_block_parameters(m, blockList):
-    """Extracts nominal values from block parameters and outputs ndarrays."""
+def calc_block_parameters(m, blockList, uncertainty=False):
+    """Extracts values from block parameters and outputs ndarrays."""
     ar = np.array([x.v for x in block_area(m, blockList)])
     flx = np.array([x.v for x in block_flux(m, blockList)])
     f = np.array([x.v for x in block_field(m, blockList)])
     da = np.array([x.diskAngle.v for x in blockList])
+
+    if uncertainty:
+        ar_unc = np.array([x.u for x in block_area(m, blockList)])
+        flx_unc = np.array([x.u for x in block_flux(m, blockList)])
+        f_unc = np.array([x.u for x in block_field(m, blockList)])
+        da_unc = np.array([x.diskAngle.u for x in blockList])
+        return ar, flx, f, da, ar_unc, flx_unc, f_unc, da_unc
+
     return ar, flx, f, da
