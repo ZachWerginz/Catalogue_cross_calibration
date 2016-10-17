@@ -77,6 +77,8 @@ def md2date(md, instr):
     return dt.datetime.fromordinal(md + dateOffset(instr).toordinal())
 
 def CRD_read(date, instr):
+    if not isinstance(date, dt.datetime):
+        date = sunpy.time.parse_time(date)
     try:
         filename = search_file(date, instr)
     except IOError:
@@ -99,7 +101,6 @@ def CRD_read(date, instr):
 def search_file(date, instr, auto=True):
     if not isinstance(date, dt.datetime):
         date = sunpy.time.parse_time(date)
-
     # Set defaults
     subdir = ''
     fn0 = instr.upper()
