@@ -166,6 +166,11 @@ def scatter_plot(dict1, dict2, separate=False):
         i += 1
     plt.show()
 
+def box_plot(p, bins=100):
+    hl, x, y = hist_axis(p, bins, constant='width')
+    boxList = [x['data'] for x in hl]
+    plt.boxplot(boxList)
+
 def plot_block_parameters(*args):
     """
     Accepts any number of p-tuples and creates scatter plots.
