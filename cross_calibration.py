@@ -24,7 +24,7 @@ __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
 i1 = None       #Instrument 1
 i2 = None       #Instrument 2
 date = None     #Date to be examined
-tol = 1         #Time difference tolerance
+tol = 0         #Time difference tolerance
 
 def usage():
     print('Usage: cross_calibration.py [-d data-root] [-f instrument 1] [-s instrument 2] [-i date] [-t tolerance]')
@@ -57,24 +57,31 @@ def parse_args():
         else:
             assert False, "unhandled option"
 
-def process_date(i1, i2, date, timeTolerance=1):
+def process_date(i1, i2, date, timeTolerance=1, timeDiffExact=None):
     """Inputs two instruments and returns unique list of dates for a date."""
     fList1 = []
     fList2 = []
 
-    #Include loop to include 24 hour difference
-    for i in range(0 - timeTolerance, 1 + timeTolerance):
+    if timeDiffExact is not None:
         try:
-            f1 = z.search_file(date + dt.timedelta(i), i1, auto=False)
-            f2 = z.search_file(date, i2, auto=False)
-            if f1 == f2 and i1 != 'mdi' and i2 != 'mdi':
-                continue
-            else:
-                fList1.extend(f1)
-                fList2.extend(f2)
+            f1, f2 = find_closest_match()
         except IOError:
-            continue
+            pass
+    else:
+        #Include loop to include 24 hour time tolerance
+        for i in range(0 - timeTolerance, 1 + timeTolerance):
+            try:
+                f1 = z.search_file(date + dt.timedelta(i), i1, auto=False)
+                f2 = z.search_file(date, i2, auto=False)
+                if f1 == f2 and i1 != 'mdi' and i2 != 'mdi':
+                    continue
+                else:
+                    fList1.extend(f1)
+                    fList2.extend(f2)
+            except IOError:
+                continue
     result = list(set(itertools.product(fList1, fList2)))
+    result = [x for x in result if x[0] != x[1]]
 
     if not result:
         raise IOError
@@ -283,6 +290,7 @@ def main():
                     #bl.append(x)
                     d.append((x[0][0].mgnt.im_raw.date, x[1][0].mgnt.im_raw.date))
                     p.append(y)
+                bl.append(x)
             elif 's' in option:
                 file1, file2 = select_pair()
                 n = int(input("Enter segmentation level: "))
