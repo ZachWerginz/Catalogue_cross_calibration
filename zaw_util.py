@@ -116,7 +116,7 @@ def search_file(date, instr, auto=True):
         subdir = '%d%02d' % (date.year - 1900, date.month)
 
     elif instr == 'mdi':
-        md = date2md(date, instr) + 1
+        md = date2md(date, instr)
         subdir = os.path.join(
                 str(date.year)
                 , 'fd_M_96m_01d.%06d' % md
