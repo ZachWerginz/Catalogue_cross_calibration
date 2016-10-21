@@ -69,6 +69,16 @@ def fit_mean_field_unc(axes, p):
     axes.plot(new_x, power_law(new_x, p[0], p[1]))
     axes.plot(-new_x, -power_law(new_x, p[0], p[1]))
 
+def fit_medians(axis, h):
+    medy = [s['med'] for s in h]
+    medx = [s['sliceMed'] for s in h]
+    popt, pcov = curve_fit(power_law, np.abs(medx), np.abs(medy))
+    new_x = np.linspace(np.nanmin(medx), np.nanmax(medx), 10000)
+    a, b = popt
+    print("a: {}, b: {}".format(a, b))
+    axis.plot(new_x, power_law(new_x, a, b), 'r')
+    axis.plot(-new_x, -power_law(new_x, a, b), 'r')
+
 def hist(p):
     """Calculates a 2D histogram and plots it."""
     x, y = combine_field_arrays(p)
@@ -96,10 +106,16 @@ def hist_colored(p):
 
 def hist_axis(p, b=100, constant='bins'):
     y, x = combine_field_arrays(p)
-    ind = np.where(np.logical_and(np.isfinite(x), np.isfinite(y)))
+    c, c2 = combine_field_arrays(p, option='color')
+    ind = np.where(np.logical_and(
+            np.logical_and(np.isfinite(x), np.isfinite(y)),
+            np.logical_and(c > 45, c < 90)
+            )
+        )
     x = x[ind]
     y = y[ind]
     histList = []
+
     #Split by constant bin width
     if constant == 'width':
         hist, xedges, yedges = np.histogram2d(x, y, bins=b)
@@ -108,7 +124,8 @@ def hist_axis(p, b=100, constant='bins'):
                 np.logical_and(
                     x < xedges[i], x >= xedges[i-1]))
             if len(inds[0]) < 10: continue
-            histList.append(get_hist_info(y[inds], xedges))
+            sliceMed = (xedges[i] + xedges[i-1]) / 2
+            histList.append(get_hist_info(y[inds], xedges, sliceMed))
     #Split by constant bin count
     else: 
         sortInd = np.argsort(x)
@@ -116,17 +133,19 @@ def hist_axis(p, b=100, constant='bins'):
         s = 0
         e = 100
         for i in range(0, len(y), b):
-            histList.append(get_hist_info(y[s:e], 10))
+            sliceMed = np.median(x[s:e])
+            histList.append(get_hist_info(y[s:e], 10, sliceMed))
             s += b
             e += b
 
     return histList, x, y
 
-def get_hist_info(data, b):
+def get_hist_info(data, b, sM):
     med = np.median(data)
-    mea = np.nanmean(data)
-    std = np.nanstd(data)
-    return {'med': med, 'mea': mea, 'std': std, 'data': data, 'b': b}
+    mea = np.mean(data)
+    std = np.std(data)
+    return {'med': med, 'mea': mea, 'std': std, 'data': data,
+            'b': b, 'sliceMed': sM}
 
 def hist_plot(histList, y, skip):
     minVal = np.min(histList[0]['data'])
@@ -166,10 +185,19 @@ def scatter_plot(dict1, dict2, separate=False):
         i += 1
     plt.show()
 
-def box_plot(p, bins=100):
-    hl, x, y = hist_axis(p, bins, constant='width')
-    boxList = [x['data'] for x in hl]
-    plt.boxplot(boxList)
+def box_plot(p, bins=100, c='width'):
+    hl, x, y = hist_axis(p, bins, c)
+    xPos = [s['sliceMed'] for s in hl]
+    boxList = [s['data'] for s in hl]
+    plt.boxplot(boxList, widths=5, positions=xPos, manage_xticks=False, whis=[2.5, 97.5], sym="")
+    plt.xlim(xPos[0]*1.2, xPos[-1]*1.2)
+    plt.title('Reference vs Calibration Magnetogram Distributions')
+    plt.ylabel(r'Reference Field (G)')
+    plt.xlabel(r'Field (G)')
+    ax = plt.gca()
+    add_identity(ax, color='.3', ls='--', zorder=1)
+    fit_medians(ax, hl)
+
 
 def plot_block_parameters(*args):
     """
@@ -279,7 +307,6 @@ def combine_field_arrays(p, unc=False, option='field'):
     xUnc = np.array([])
     y = np.array([])
     yUnc = np.array([])
-    color = np.array([])
     if option == 'area':
         i = 0
     elif option == 'flux':
