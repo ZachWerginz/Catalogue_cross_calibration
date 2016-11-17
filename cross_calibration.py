@@ -16,6 +16,7 @@ import random
 import sunpy.time
 import getopt
 import sys
+from timeparse import timeparse
 
 __authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
 __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
@@ -23,11 +24,9 @@ __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
 
 i1 = None       #Instrument 1
 i2 = None       #Instrument 2
-date = None     #Date to be examined
-tol = 0         #Time difference tolerance
 
 def usage():
-    print('Usage: cross_calibration.py [-d data-root] [-f instrument 1] [-s instrument 2] [-i date] [-t tolerance]')
+    print('Usage: cross_calibration.py [-d data-root] [-f instrument 1] [-s instrument 2] [-t tolerance]')
 
 def parse_args():
     """Sets global variables for scripting purposes."""
@@ -36,8 +35,8 @@ def parse_args():
     try:
         opts, args = getopt.getopt(
                 sys.argv[1:],
-                "d:f:s:i:t:", 
-                ["data-root=", "instrument-1=", "instrument-2=", "date=", "tol="])
+                "d:f:s:t:", 
+                ["data-root=", "instrument-1=", "instrument-2=", "tol="])
     except getopt.GetoptError as err:
         print(err)
         usage()
@@ -50,36 +49,28 @@ def parse_args():
             i1 = arg
         elif opt in ("-s", "--second-instr"):
             i2 = arg
-        elif opt in ("-i", "--date"):
-            date = sunpy.time.parse_time(arg)
         elif opt in ("-t", "--tol"):
-            tol = int(arg)
+            tol2 = int(arg)
         else:
             assert False, "unhandled option"
 
-def process_date(i1, i2, date, timeTolerance=1, timeDiffExact=None):
+def process_date(i1, i2, date, timeTolerance=1):
     """Inputs two instruments and returns unique list of dates for a date."""
     fList1 = []
     fList2 = []
 
-    if timeDiffExact is not None:
+    #Include loop to include 24 hour time tolerance
+    for i in range(0 - timeTolerance, 1 + timeTolerance):
         try:
-            f1, f2 = find_closest_match()
-        except IOError:
-            pass
-    else:
-        #Include loop to include 24 hour time tolerance
-        for i in range(0 - timeTolerance, 1 + timeTolerance):
-            try:
-                f1 = z.search_file(date + dt.timedelta(i), i1, auto=False)
-                f2 = z.search_file(date, i2, auto=False)
-                if f1 == f2 and i1 != 'mdi' and i2 != 'mdi':
-                    continue
-                else:
-                    fList1.extend(f1)
-                    fList2.extend(f2)
-            except IOError:
+            f1 = z.search_file(date + dt.timedelta(i), i1, auto=False)
+            f2 = z.search_file(date, i2, auto=False)
+            if f1 == f2 and i1 != 'mdi' and i2 != 'mdi':
                 continue
+            else:
+                fList1.extend(f1)
+                fList2.extend(f2)
+        except IOError:
+            continue
     result = list(set(itertools.product(fList1, fList2)))
     result = [x for x in result if x[0] != x[1]]
 
@@ -88,7 +79,7 @@ def process_date(i1, i2, date, timeTolerance=1, timeDiffExact=None):
 
     return result
 
-def process_instruments(i1, i2, retDates=False, timeTolerance=1):
+def process_instruments(i1, i2, par, retDates=False):
     """
     Returns a list of valid file combinations.
 
@@ -97,41 +88,49 @@ def process_instruments(i1, i2, retDates=False, timeTolerance=1):
     If retDates is set to true, it will also return a list of dates where
     matches were found.
     """
-    if timeTolerance == 1 and retDates:
-        return z.load_instrument_overlap(i1, i2)
-    elif timeTolerance == 1 and not retDates:
-        return z.load_instrument_overlap(i1, i2)[0]
+    # if timeTolerance == 1 and retDates:
+    #     return z.load_instrument_overlap(i1, i2)
+    # elif timeTolerance == 1 and not retDates:
+    #     return z.load_instrument_overlap(i1, i2)[0]
+    # start_i1, end_i1 = z.date_defaults(i1)
+    # start_i2, end_i2 = z.date_defaults(i2)
 
-    if i1==i2:
-        if i1 in ('512', 'spmg'):
-            start_i1, end_i1 = z.date_defaults('512')
-            start_i2, end_i2 = z.date_defaults('spmg')
-        elif i1=='mdi':
-            start_i1, end_i1 = z.date_defaults('spmg')
-            start_i2, end_i2 = z.date_defaults('mdi')
-        else:
-            start_i1, end_i1 = z.date_defaults('mdi')
-            start_i2, end_i2 = z.date_defaults('hmi')
+    # start = max(start_i1, start_i2)
+    # end = min(end_i1, end_i2)
+    # date = start
+    # files = []
+    # dates = []
 
-    start = max(start_i1, start_i2)
-    end = min(end_i1, end_i2)
-    date = start
-    files = []
-    dates = []
+    # while date < end:
+    #     try:
+    #         files.extend(process_date(i1, i2, date, timeTolerance))
+    #         dates.append(date)
+    #     except IOError:
+    #         continue
+    #     finally:
+    #         date += dt.timedelta(1)
 
-    while date < end:
-        try:
-            files.extend(process_date(i1, i2, date, timeTolerance))
-            dates.append(date)
-        except IOError:
-            continue
-        finally:
-            date += dt.timedelta(1)
+    # if retDates:
+    #     return list(set(files)), dates
+    # else:
+    #     return list(set(files))
+    tol1 = par['t1']
+    tol2 = par['t2']
+
+    if i1 == '512': i1 = 'kpvt'
+
+    df = z.load_match_database()
+    firstPass = df[
+        (df['File 1'].str.contains(i1.upper()) & df['File 2'].str.contains(i2.upper()))
+        | (df['File 1'].str.contains(i2.upper()) & df['File 2'].str.contains(i1.upper()))]
+    secondPass = firstPass[(firstPass['Time Difference'] < tol2) & (firstPass['Time Difference'] > tol1)]
+    res = [(x, y) for x, y in zip(secondPass['File 1'].values, secondPass['File 2'].values)]
 
     if retDates:
-        return list(set(files)), dates
+        dates = [x for x in secondPass['Date 1']]
+        return res, dates
     else:
-        return list(set(files))
+        return res
 
 def coordinate_compare(i1, i2):
     """
@@ -208,7 +207,7 @@ def run_multiple_n(m):
         n_dict_length[n] = len(N)
     return n_dict_length
 
-def compare_day(i1, i2, n, date=None, f1=None, f2=None):
+def compare_day(i1, i2, par, f1=None, f2=None):
     """
     Fully autonomous magnetogram comparison function.
 
@@ -218,11 +217,11 @@ def compare_day(i1, i2, n, date=None, f1=None, f2=None):
     """
     if f1 is not None or f2 is not None:
         files = (f1, f2)
-    elif date is None:
-        files = random.choice(process_instruments(i1, i2, timeTolerance=tol))
+    else:
+        files = random.choice(process_instruments(i1, i2, par))
 
     m1, m2 = fix_longitude(files[0], files[1])
-    i1_n, i2_n = quad.fragment_multiple(m1, m2, n)
+    i1_n, i2_n = quad.fragment_multiple(m1, m2, par['n'])
     p_i1 = quad.calc_block_parameters(m1, i1_n, uncertainty=True)
     p_i2 = quad.calc_block_parameters(m2, i2_n, uncertainty=True)
 
@@ -233,9 +232,9 @@ def get_instruments():
     i1 = input("Enter an instrument: ")
     i2 = input("Enter a second instrument: ")
 
-def select_pair():
+def select_pair(par):
     """Guides user through valid date combinations and returns filepaths."""
-    files, dates = process_instruments(i1, i2, True, tol)
+    files, dates = process_instruments(i1, i2, par, True)
     print(set([x.year for x in dates]))
     y = input("Choose a year: ")
     print(set([x.month for x in dates if x.year == int(y)]))
@@ -243,13 +242,27 @@ def select_pair():
     print(set([x.day for x in dates if x.year == int(y) and x.month == int(m)]))
     d = input("Choose a day: ")
     t = [x for x in dates if x.year == int(y) and x.month == int(m) and x.day == int(d)][0]
-    files = process_date(i1, i2, t, tol)
+    files = process_date(i1, i2, t, 1)
     k = 0
     for line in files:
         print("{}: ({}, {})".format(k, line[0].split('\\')[-1], line[1].split('\\')[-1]))
         k += 1
     choice = int(input("Select a pair: "))
     return files[choice]
+
+def del_bad(p, d):
+    bad = []
+    for i in range(len(p)):
+        if len(np.where(p[i][1][2]/p[i][0][2] > 100)[0]) > 10:
+            bad.append(i)
+            continue
+        if len(np.where(p[i][0][2]/p[i][1][2] > 100)[0]) > 10:
+            bad.append(i)
+
+    for i in sorted(bad, reverse=True):
+        del p[i]
+        del d[i]
+
 
 def main():
     """
@@ -285,16 +298,26 @@ def main():
                 except ValueError:
                     passes = 1
                 n = int(input("Enter segmentation level: "))
+                tol1 = dt.timedelta(seconds=timeparse(input("Enter minimum time: ")))
+                tol2 = dt.timedelta(seconds=timeparse(input("Enter maximum time: ")))
+                params = {'n': n, 't1': tol1, 't2': tol2}
                 for i in range(passes):
-                    x, y = compare_day(i1, i2, n)
+                    x, y = compare_day(i1, i2, params)
                     #bl.append(x)
-                    d.append((x[0][0].mgnt.im_raw.date, x[1][0].mgnt.im_raw.date))
+                    try:
+                        d.append((x[0][0].mgnt.im_raw.date, x[1][0].mgnt.im_raw.date))
+                    except IndexError as e:
+                        print(e)
+                        continue
                     p.append(y)
                 bl.append(x)
             elif 's' in option:
-                file1, file2 = select_pair()
+                tol1 = dt.timedelta(seconds=timeparse(input("Enter minimum time: ")))
+                tol2 = dt.timedelta(seconds=timeparse(input("Enter maximum time: ")))
                 n = int(input("Enter segmentation level: "))
-                x, y = compare_day(i1, i2, n, f1=file1, f2=file2)
+                params = {'n': n, 't1': tol1, 't2': tol2}
+                file1, file2 = select_pair(params)
+                x, y = compare_day(i1, i2, params, f1=file1, f2=file2)
                 bl.append(x), p.append(y)
             elif 'h' in option:
                 b.plot_block_parameters(*p)

@@ -6,6 +6,8 @@ import random
 __authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
 __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
 
+info = True
+
 
 class Quadrangle:
     """
@@ -72,7 +74,7 @@ def fragment_multiple(m1, m2, n):
     refmgnt = m1
     secmgnt = m2
 
-    print("Processing {}".format(n))
+    printInfo("Processing {}".format(n))
     refFragInfo = get_fragmentation_info(refmgnt, n)
     secFragInfo = get_fragmentation_info(secmgnt, n, refFragInfo['lonBands'])
     refBlocks, secBlocks = fragmentation_loop(refFragInfo, secFragInfo)
@@ -277,6 +279,7 @@ def block_flux(mgnt, blocks):
 
 def calc_block_parameters(m, blockList, uncertainty=False):
     """Extracts values from block parameters and outputs ndarrays."""
+    printInfo('Calculating block parameters...')
     ar = np.array([x.v for x in block_area(m, blockList)])
     flx = np.array([x.v for x in block_flux(m, blockList)])
     f = np.array([x.v for x in block_field(m, blockList)])
@@ -290,3 +293,7 @@ def calc_block_parameters(m, blockList, uncertainty=False):
         return ar, flx, f, da, ar_unc, flx_unc, f_unc, da_unc
 
     return ar, flx, f, da
+
+def printInfo(str):
+    if info:
+        print(str)

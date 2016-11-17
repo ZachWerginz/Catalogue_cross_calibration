@@ -38,6 +38,10 @@ def load_instrument_overlap(i1, i2):
     with open(fn, 'rb') as f:
         return pickle.load(f)
 
+def load_match_database():
+    store = pd.HDFStore(os.path.join(data_root, 'db.h5'))
+    return store['ALL']
+
 def date_defaults(instr):
     if instr == '512':
         return dt.datetime(1976, 1, 5), dt.datetime(1993, 4, 9)
@@ -131,9 +135,11 @@ def search_file(date, instr, auto=True):
 
     # Execute
     searchspec = os.path.join(data_root, fn0, subdir, filename)
+    files = glob.glob(searchspec)
+
     pdebug('searchspec: ' + searchspec)
 
-    files = glob.glob(searchspec)
+    
 
     if not files:
         raise IOError('File not found')

@@ -1,16 +1,19 @@
 from __future__ import division
 import numpy as np
+
 import sunpy.map
 from sunpy.sun import constants
 from sunpy.sun import sun
 import astropy.units as u
+from astropy.io import fits
+import os.path
+import warnings
 
 import kpvt_class
 from uncertainty import Measurement as M
 
 __authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
 __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
-
 
 class CRD:
     """Calculates various magnetogram coordinate information.
@@ -28,7 +31,23 @@ class CRD:
     
     def __init__(self, filename):
         """Reads magnetogram as a sunpy.map object."""
-        self.im_raw = sunpy.map.Map(filename)
+        self.fn = filename
+        try:
+            CRDfilename = filename.replace('.fits', '.CRD.fits')
+            paths = os.path.splitdrive(CRDfilename)
+            CRDfilename = os.path.join(paths[0], 'CRD', paths[1])
+            mfits = fits.open(CRDfilename)
+            i = self._get_instrument(mfits)
+            self.im_raw = sunpy.map.Map(mfits[i].data, mfits[i].header)
+            self.lonh = M(mfits[i+1].data[0], mfits[i+1].data[1])
+            self.lath = M(mfits[i+2].data[0], mfits[i+2].data[1])
+            self.area = M(mfits[i+3].data[0], mfits[i+3].data[1])
+            self.im_corr = M(mfits[i+4].data[0], mfits[i+4].data[1])
+            self.crdfn = True
+            mfits.close()
+        except IOError:
+            self.im_raw = sunpy.map.Map(filename)
+            self.crdfn = False
 
         if self.im_raw.detector == '512':
 
@@ -74,6 +93,8 @@ class CRD:
                 self.B0 = M(self.im_raw.meta['OBS_B0'], np.abs(self.im_raw.meta['OBS_B0'])*.01)
                 self.L0 = M(self.im_raw.meta['OBS_L0'], np.abs(self.im_raw.meta['OBS_L0'])*.01)
             self.SL0 = self.L0 - sun.heliographic_solar_center(self.im_raw.date)[0].value
+            if self.SL0 < -90: self.SL0 += 360
+            if self.SL0 > 90: self.SL0 -= 360
             self.xScale = M(1.982, 0.003)
             self.yScale = M(1.982, 0.003)
             
@@ -88,6 +109,7 @@ class CRD:
             self.B0 = M(self.im_raw.meta['CRLT_OBS'], np.abs(self.im_raw.meta['CRLT_OBS'])*.01)
             self.L0 = M(self.im_raw.meta['CRLN_OBS'], np.abs(self.im_raw.meta['CRLN_OBS'])*.01)
             self.SL0 = self.L0 - sun.heliographic_solar_center(self.im_raw.date)[0].value
+            if self.SL0 < 0: self.SL0 += 360
             self.xScale = M(self.im_raw.scale[0].value, 0.001)
             self.yScale = M(self.im_raw.scale[1].value, 0.001)
             
@@ -97,11 +119,17 @@ class CRD:
             raise IOError
 
         self.im_raw_u = M(self.im_raw.data, np.abs(self.im_raw.data)*.10)
+        #Fill in last bit of data if reading in CRD file.
+        if hasattr(self, 'lonh'):
+            x, y = self._grid()
             
     def __repr__(self):
-        for key in ['X0', 'Y0', 'B0', 'L0', 'xScale', 'yScale', 'rsun', 'dsun']:
-            print ("{0}: {1}".format(key, getattr(self, key)))
+        super(CRD, self).__repr__()
         #TODO: add attribute checks and fix Nonetype return error
+
+    def __del__(self):
+        if not self.crdfn and hasattr(self, 'area'):
+            self.save_CRD()
 
     def meta(self):
         """Prints the fits header in a more readable fashion."""
@@ -126,6 +154,9 @@ class CRD:
         lath, lonh = kpvt.heliographic()
         aia.heliographic(320, 288, array=False)
         """
+        if array and hasattr(self, 'lonh') and not corners:
+            return
+
 
         # Check for single coordinate or ndarray object.
         if array:
@@ -146,8 +177,7 @@ class CRD:
         lonh, lath = self._hcc_hg(rx, ry, rz, self.B0, self.SL0)
 
         self.im_raw.data[self.rg > self.rsun] = np.nan
-        # Only add the instance attribute if it doesn't exist.
-        if array and not hasattr(self, 'lonh') and not corners:
+        if not corners:
             self.lonh = lonh
             self.lath = lath
             return
@@ -163,8 +193,11 @@ class CRD:
         calulations.
         """
 
-        print("Correcting line of sight magnetic field.")
-        if array:
+       
+        if array and hasattr(self, 'im_corr'):
+            return
+        elif array:
+            print("Correcting line of sight magnetic field...")
             try:
                 lonh, lath = M.deg2rad(self.lonh), M.deg2rad(self.lath)
             except AttributeError:
@@ -203,11 +236,13 @@ class CRD:
         at the center of the sun.
         """
 
-        print ("Calculating element of area.")
+        if array and hasattr(self, 'area'):
+            return
         # Assume coordinate is in center of pixel.
         # Information on pixel standard is in this article.
         # http://www.aanda.org/component/article?access=bibcode&bibcode=&bibcode=2002A%2526A...395.1061GFUL
         if array:
+            print ("Calculating element of area...")
             lon, lat = self.heliographic(corners=True)
             lon = lon*np.pi/180
             lat = lat*np.pi/180
@@ -269,7 +304,11 @@ class CRD:
 
     def magnetic_flux(self, *args, array=True, raw_field=False):
         """Takes in coordinates and returns magnetic flux of pixel."""
-        if array:
+        if not array:
+            return self.eoa(*args)*self.los_corr(*args)
+        else:
+            if hasattr(self, 'mflux_corr'):
+                return
             try:
                 area = self.area
             except AttributeError:
@@ -278,7 +317,7 @@ class CRD:
 
             if raw_field:
                 field = self.im_raw_u
-                print ("Calculating raw magnetic flux.")
+                print ("Calculating raw magnetic flux...")
                 self.mflux_raw = area*field
                 return
             else:
@@ -288,12 +327,33 @@ class CRD:
                     self.los_corr()
                     field = self.im_corr
                 finally:
-                    print ("Calculating corrected magnetic flux.")
+                    print ("Calculating corrected magnetic flux...")
                     self.mflux_corr = area*field
                     return
 
-        else:
-            return self.eoa(*args)*self.los_corr(*args)
+    def save_CRD(self):
+        """Saves magnetogram with coordinate data in alternate fits file."""
+
+        mfits = fits.open(self.fn)
+        attr = [self.lonh, self.lath, self.area, self.im_corr]
+        units = ['deg', 'deg', 'cm^2', 'G', 'Mx']
+        xName = ['LATITUDE', 'LONGITUDE', 'AREA', 'LOS CORRECTED FIELD']
+        for dataArray in attr:
+            mfits.append(fits.ImageHDU(np.array([dataArray.v.astype('float32'), dataArray.u.astype('float32')])))
+
+        j = self._get_instrument(mfits)
+        for i in range(1 + j, 5 + j):
+            mfits[i].header['DATE-OBS'] = self.im_raw.date.isoformat()
+            mfits[i].header['INSTRUME'] = self.im_raw.instrument
+            mfits[i].header['BUNIT'] = units[i - 1 - j]
+            mfits[i].header['EXTNAME'] = xName[i - 1 - j]
+
+        fn = self.fn.replace('.fits', '.CRD.fits')
+        s = fn.split(':')
+        s[0] = s[0] + ':'
+        new_fn = os.path.join(s[0], 'CRD', s[-1])
+        mfits.writeto(new_fn, output_verify='ignore')
+        mfits.close()
     
     def _grid(self, corners=False):
         """Create an xy grid of coordinates for heliographic array.
@@ -396,3 +456,11 @@ class CRD:
         r[1] = Yar
         r[2] = Zar
         return r
+
+    def _get_instrument(self, mfits):
+        """Returns the fits primary data HDU index."""
+
+        if len(mfits[0].header) < 10:
+            return 1
+        else:
+            return 0
