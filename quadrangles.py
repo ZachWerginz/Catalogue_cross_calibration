@@ -252,7 +252,7 @@ def block_area(mgnt, blocks):
     return areas
 
 def block_field(mgnt, blocks, raw=False):
-    """Given a list of blocks, will calculate and print out areas."""
+    """Given a list of blocks, will calculate and print out mean flux density."""
     #TODO: add raw/corrected field support0
     field = []
     for block in blocks:
@@ -263,7 +263,7 @@ def block_field(mgnt, blocks, raw=False):
     return field
 
 def block_flux(mgnt, blocks):
-    """Given a list of blocks, will calculate and print out areas."""
+    """Given a list of blocks, will calculate and print out total flux."""
 
     flux = []
     for block in blocks:
@@ -281,18 +281,16 @@ def calc_block_parameters(m, blockList, uncertainty=False):
     """Extracts values from block parameters and outputs ndarrays."""
     printInfo('Calculating block parameters...')
     ar = np.array([x.v for x in block_area(m, blockList)])
-    flx = np.array([x.v for x in block_flux(m, blockList)])
     f = np.array([x.v for x in block_field(m, blockList)])
-    da = np.array([x.diskAngle.v for x in blockList])
+    da = np.array([np.float32(x.diskAngle.v) for x in blockList])
 
     if uncertainty:
         ar_unc = np.array([x.u for x in block_area(m, blockList)])
-        flx_unc = np.array([x.u for x in block_flux(m, blockList)])
         f_unc = np.array([x.u for x in block_field(m, blockList)])
-        da_unc = np.array([x.diskAngle.u for x in blockList])
-        return ar, flx, f, da, ar_unc, flx_unc, f_unc, da_unc
+        da_unc = np.array([np.float32(x.diskAngle.u) for x in blockList])
+        return ar, f, da, ar_unc, f_unc, da_unc
 
-    return ar, flx, f, da
+    return ar, f, da
 
 def printInfo(str):
     if info:

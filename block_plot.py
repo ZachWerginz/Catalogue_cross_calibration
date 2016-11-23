@@ -30,8 +30,12 @@ def add_identity(axes, *line_args, **line_kwargs):
     axes.callbacks.connect('ylim_changed', callback)
     return axes
 
-def power_law(x, a, b, c):
-    """Used in fitting the mean fields."""
+def power_law(x, a, b):
+    """Used in fitting the mean fields without the vertical shift."""
+    return (a*(x**b))
+
+def power_law_c(x, a, b, c):
+    """Used in fitting the mean fields with the vertical shift."""
     return (a*(x**b)) + c
 
 def power_law_odr(p, x):
@@ -75,22 +79,22 @@ def fit_medians(ax, h, **kwargs):
     medy = [s['med'] for s in h]
     medx = [s['sliceMed'] for s in h]
     popt, pcov = curve_fit(power_law, np.abs(medx), np.abs(medy))
-    a, b, c = popt
+    a, b = popt
     def callback(axes):
         low_x, high_x = axes.get_xlim()
         low_y, high_y = axes.get_ylim()
         low = min(low_x, low_y)
         high = max(high_x, high_y)
         new_x = np.linspace(low, high, 10000)
-        ax.plot(new_x, power_law(new_x, a, b, c), **kwargs)
-        ax.plot(-new_x, -power_law(new_x, a, b, c), **kwargs)
+        ax.plot(new_x, power_law(new_x, a, b), **kwargs)
+        ax.plot(-new_x, -power_law(new_x, a, b), **kwargs)
     callback(ax)
-    print("a: {}, b: {}, c: {}".format(a, b, c))
+    print("a: {}, b: {}".format(a, b))
     ax.callbacks.connect('xlim_changed', callback)
     ax.callbacks.connect('ylim_changed', callback)
 
 def fit_xy(x, y, ax, **kwargs):
-    popt, pcov = curve_fit(power_law, x, y, p0=(1,-1,1), maxfev=10000)
+    popt, pcov = curve_fit(power_law_c, x, y, p0=(1,-1,1), maxfev=10000)
     a, b, c = popt
     def callback(axes):
         low_x, high_x = axes.get_xlim()
@@ -98,7 +102,7 @@ def fit_xy(x, y, ax, **kwargs):
         low = min(low_x, low_y)
         high = max(high_x, high_y)
         new_x = np.linspace(low, high, 10000)
-        ax.plot(new_x, power_law(new_x, a, b, c), **kwargs)
+        ax.plot(new_x, power_law_c(new_x, a, b, c), **kwargs)
     callback(ax)
     print("a: {}, b: {}, c: {}".format(a, b, c))
     ax.callbacks.connect('xlim_changed', callback)
@@ -452,7 +456,9 @@ def block_plot(*args, overlay=True):
             ax[i] = plt.subplot2grid((rows, cols), (i%rows, i//rows))
             if overlay:
                 ax[i].imshow(args[i][0].mgnt.im_raw.data, cmap='binary')
-            ax[i].imshow(im[i], vmin=0, vmax=1, alpha=.2)
+                ax[i].imshow(im[i], vmin=0, vmax=1, alpha=.2)
+            else:
+                ax[i].imshow(im[i], vmin=0, vmax=1)
             title = "{}: {}".format(args[i][0].mgnt.im_raw.instrument, 
                     args[i][0].mgnt.im_raw.date.isoformat())
             ax[i].set_title(title)
@@ -471,18 +477,16 @@ def combine_field_arrays(p, unc=False, option='field'):
     yUnc = np.array([])
     if option == 'area':
         i = 0
-    elif option == 'flux':
-        i = 1
     elif option == 'field':
-        i =  2
+        i =  1
     elif option == 'color':
-        i = 3
+        i = 2
     for s in range(len(p)):
         x = np.append(x, p[s][0][i])
         y = np.append(y, p[s][1][i])
         if unc:
-            xUnc = np.append(xUnc, p[s][0][i + 4])
-            yUnc = np.append(yUnc, p[s][1][i + 4])
+            xUnc = np.append(xUnc, p[s][0][i + 3])
+            yUnc = np.append(yUnc, p[s][1][i + 3])
 
     if unc:
         return x, y, xUnc, yUnc
