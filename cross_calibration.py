@@ -17,6 +17,7 @@ import sunpy.time
 import getopt
 import sys
 from timeparse import timeparse
+from scipy.interpolate import griddata
 
 __authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
 __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
@@ -186,6 +187,8 @@ def fix_longitude(f1, f2):
     print(m2.im_raw.date)
     m1.heliographic()
     m2.heliographic()
+    m1.magnetic_flux()
+    m2.magnetic_flux()
     # Don't need right away for looking at consistency
     # m1.magnetic_flux()
     # m2.magnetic_flux()
@@ -193,8 +196,32 @@ def fix_longitude(f1, f2):
     rotation = z.diff_rot(m1, m2)
     m2.lonhOld = m2.lonh
     m2.lonh = rotation.value + m2.lonh
+    if m2.im_raw.dimensions[0].value > m1.im_raw.dimensions[0].value:
+        interpolate_remap(m2, m1)
+    else:
+        interpolate_remap(m1, m2)
 
     return m1, m2
+
+def interpolate_remap(m1, m2):
+
+    x = m2.lath.v.flatten()
+    y = m2.lonh.v.flatten()
+    values = m2.im_raw.data.flatten()
+    xi = m1.lath.v.flatten()
+    yi = m1.lonh.v.flatten()
+    dim = m2.im_raw.dimensions
+
+    ind2 = np.where(np.logical_and(np.isfinite(x), np.isfinite(values)))
+    ind1 = np.where(np.isfinite(xi))
+
+    interp_data = griddata((x[ind2], y[ind2]), values[ind2], (xi[ind1], yi[ind1]), method='cubic')
+    new_m2 = np.full((int(dim[0].value), int(dim[1].value)), np.nan)
+
+    new_m2.ravel()[ind1] = interp_data
+    new_m2.ravel()[(m1.rg.v.flatten() > m1.rsun*np.sin(75.0*np.pi/180))] = np.nan
+
+    m2.remap = new_m2
 
 def run_multiple_n(m):
     """Takes mgnt and returns list of different fragmented quadrangles."""
@@ -221,11 +248,9 @@ def compare_day(i1, i2, par, f1=None, f2=None):
         files = random.choice(process_instruments(i1, i2, par))
 
     m1, m2 = fix_longitude(files[0], files[1])
-    i1_n, i2_n = quad.fragment_multiple(m1, m2, par['n'])
-    p_i1 = quad.calc_block_parameters(m1, i1_n, uncertainty=True)
-    p_i2 = quad.calc_block_parameters(m2, i2_n, uncertainty=True)
+    blocks_n = quad.fragment_multiple(m1, m2, par['n'])
 
-    return (i1_n, i2_n), (p_i1, p_i2)
+    return blocks_n
 
 def get_instruments():
     global i1, i2
@@ -283,13 +308,11 @@ def main():
     if i1 is None or i2 is None:
         get_instruments()
 
-    p = []
     bl = []
-    d = []
 
     while True:
         try:
-            option = input("Choose a function: (r)andom [num], (s)elect date, switch (i)nstruments, s(h)ow plots, (e)xit: ")
+            option = input("Choose a function: (r)andom [num], (s)elect date, switch (i)nstruments, (e)xit: ")
             if option=='i':
                 get_instruments()
             elif 'r' in option:
@@ -302,34 +325,22 @@ def main():
                 tol2 = dt.timedelta(seconds=timeparse(input("Enter maximum time: ")))
                 params = {'n': n, 't1': tol1, 't2': tol2}
                 for i in range(passes):
-                    x, y = compare_day(i1, i2, params)
-                    #bl.append(x)
-                    try:
-                        d.append((x[0][0].mgnt.im_raw.date, x[1][0].mgnt.im_raw.date))
-                    except IndexError as e:
-                        print(e)
-                        continue
-                    p.append(y)
-                bl.append(x)
+                    b = compare_day(i1, i2, params)
+                    bl.append(b)
             elif 's' in option:
                 tol1 = dt.timedelta(seconds=timeparse(input("Enter minimum time: ")))
                 tol2 = dt.timedelta(seconds=timeparse(input("Enter maximum time: ")))
                 n = int(input("Enter segmentation level: "))
                 params = {'n': n, 't1': tol1, 't2': tol2}
                 file1, file2 = select_pair(params)
-                x, y = compare_day(i1, i2, params, f1=file1, f2=file2)
-                bl.append(x), p.append(y)
-            elif 'h' in option:
-                b.plot_block_parameters(*p)
-                if len(p) == 1:
-                    b.block_plot()
-                plt.show()
+                b = compare_day(i1, i2, params, f1=file1, f2=file2)
+                bl.append(b)
             elif 'e' in option:
                 break
         except Exception as e:
             print(e)
             continue
-    return bl, p, d
+    return bl
 
 if __name__ == "__main__":
     main()
