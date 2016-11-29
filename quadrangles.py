@@ -14,45 +14,48 @@ class Quadrangle:
     Quadrangle(mgnt, indices, ID)
     """
 
-    def __init__(self, mgnt, indices, ID, c=random.random()):
+    def __init__(self, mgnt, i, ID, m2=None):
         """Accepts heliographic bounds and a list of indices for block """
-        self.mgnt = mgnt
-        self.indices = indices
         self.id = ID
-        self.pltColor = c
-        self.lat = (self.min_latitude(), self.max_latitude())
-        self.lon = (self.min_longitude(), self.max_longitude())
-        self.diskAngle = self.averageDA()
+        self.date1 = mgnt.im_raw.date
+        self.lat = (self.min_latitude(mgnt, i), self.max_latitude(mgnt, i))
+        self.lon = (self.min_longitude(mgnt, i), self.max_longitude(mgnt, i))
+        self.diskAngle = self.averageDA(mgnt, i)
+        self.area = self.sum_area(mgnt, i)
+        self.fluxDensity = self.mean_flux_density(mgnt.im_raw_u, i)
+        if m2 is not None:
+            self.fluxDensity2 = self.mean_flux_density(m2.remap, i)
+            self.date2 = m2.im_raw.date
 
-    def min_latitude(self):
-        return M.nanmin(self.mgnt.lath[self.indices])
 
-    def max_latitude(self):
-        return M.nanmax(self.mgnt.lath[self.indices])
+    def min_latitude(self, m, ind):
+        return M.nanmin(m.lath[ind])
 
-    def min_longitude(self):
-        return M.nanmin(self.mgnt.lonh[self.indices])
+    def max_latitude(self, m, ind):
+        return M.nanmax(m.lath[ind])
 
-    def max_longitude(self):
-        return M.nanmax(self.mgnt.lonh[self.indices])
+    def min_longitude(self, m, ind):
+        return M.nanmin(m.lonh[ind])
 
-    def averageDA(self):
+    def max_longitude(self, m, ind):
+        return M.nanmax(m.lonh[ind])
+
+    def averageDA(self, m, ind):
         """Returns the angular distance from disk center in degrees."""
-        mgnt = self.mgnt
-        meanAngularRadius = M.nanmean(mgnt.rg[self.indices])
-        return M.arcsin(meanAngularRadius/mgnt.rsun)*180/np.pi
+        meanAngularRadius = M.nanmean(m.rg[ind])
+        return M.arcsin(meanAngularRadius/m.rsun)*180/np.pi
 
-    def mean_field(self):
-        """Returns the average uncorrected magnetic field."""
-        return M.nanmean(self.mgnt.im_raw_u[self.indices])
+    def mean_flux_density(self, arr, ind):
+        """Returns the average uncorrected magnetic flux density."""
+        return M.nanmean(arr[ind])
 
-    def sum_flux(self):
-        """Returns the total corrected magnetic flux."""
-        return M.nansum(self.mgnt.mflux_corr[self.indices])
-
-    def sum_area(self):
+    def sum_area(self, m, ind):
         """Returns the total area covered by the quadrangle."""
-        return M.nansum(self.mgnt.area[self.indices])
+        try:
+            return M.nansum(m.area[ind])
+        except AttributeError:
+            m.eoa()
+            return M.nansum(m.area[ind])
 
 def fragment_single(mgnt, n):
     """
@@ -76,10 +79,9 @@ def fragment_multiple(m1, m2, n):
 
     printInfo("Processing {}".format(n))
     refFragInfo = get_fragmentation_info(refmgnt, n)
-    secFragInfo = get_fragmentation_info(secmgnt, n, refFragInfo['lonBands'])
-    refBlocks, secBlocks = fragmentation_loop(refFragInfo, secFragInfo)
+    blocks = fragmentation_loop(refFragInfo, secmgnt)
     
-    return refBlocks, secBlocks
+    return blocks
 
 def get_fragmentation_info(m, n, lonBands=None):
     """
@@ -106,7 +108,7 @@ def get_fragmentation_info(m, n, lonBands=None):
             'lonMasks': lonMasks}
     return fragInfo
 
-def fragmentation_loop(refFragInfo, secFragInfo=None):
+def fragmentation_loop(refFragInfo, secmgnt=None):
     """
     The main loop that finds valid indices for lat/lon conditions.
 
@@ -128,15 +130,6 @@ def fragmentation_loop(refFragInfo, secFragInfo=None):
     l = int(mgnt.im_raw.dimensions[0].value)
     n = len(lonBands) - 1
 
-    if secFragInfo is not None:
-        secBlocks = []
-        secmgnt = secFragInfo['mgnt']
-        secLatBands = secFragInfo['latBands']
-        secLonBands = secFragInfo['lonBands']
-        secLonMasks = secFragInfo['lonMasks']
-        secCurrLat = (secmgnt.lath_1d > latBands[0])
-        secL = int(secmgnt.im_raw.dimensions[0].value)
-
     currLat = (mgnt.lath_1d > latBands[0])
     for i in range(n):
         nextLat = (mgnt.lath_1d > latBands[i + 1])
@@ -152,10 +145,6 @@ def fragmentation_loop(refFragInfo, secFragInfo=None):
         e = np.searchsorted(lonBands, maxLon)
         skip = int(round(areaRatio))
 
-        if secFragInfo is not None:
-            secNextLat = (secmgnt.lath_1d > latBands[i + 1])
-            secLatitudeSetDiff = secCurrLat*~secNextLat
-
         for j in range(s, e, skip):
             uuid = str(i) + str(j) + str(n)
             try:
@@ -165,30 +154,12 @@ def fragmentation_loop(refFragInfo, secFragInfo=None):
             if ~(blockBool.any()):
                 continue
             else:
-                c = random.random()
-
-                if secFragInfo is not None:
-                    try:
-                        secBlockBool = secLonMasks[j]*~secLonMasks[j+skip]*secLatitudeSetDiff
-                    except IndexError:
-                        secBlockBool = secLonMasks[j]*~secLonMasks[-1]*secLatitudeSetDiff
-                    if ~(secBlockBool.any()):
-                        continue
-                    secBlockInd = _transform_indices(secmgnt.ind_1d[secBlockBool], secL)
-                    y = Quadrangle(secmgnt, secBlockInd, uuid, c)
-                    secBlocks.append(y)
-
                 blockInd = _transform_indices(mgnt.ind_1d[blockBool], l)
-                x = Quadrangle(mgnt, blockInd, uuid, c)
+                x = Quadrangle(mgnt, blockInd, uuid, secmgnt)
                 blocks.append(x)
         currLat = nextLat
-        if secFragInfo is not None:
-            secCurrLat = secNextLat
 
-    if secFragInfo is not None:
-        return blocks, secBlocks
-    else:
-        return blocks
+    return blocks
 
 def _split(n, minimum=-90, maximum=90):
     """Returns an interval space based on n number of blocks."""
@@ -236,61 +207,15 @@ def _transform_indices(ind, l):
     rows = ind // l
     return (rows, cols)
 
-def block_area(mgnt, blocks):
-    """Given a list of blocks, will calculate area totals."""
+def extract_list_parameters(blocksList):
+    """Takes a list of day pairs and extracts elements from them."""
 
-    areas = []
-    for block in blocks:
-        try:
-            areas.append(block.sum_area())
-        except AttributeError:
-            mgnt.eoa()
-            areas.append(block.sum_area())
-        except:
-            areas.append(M(np.nan, np.nan))
+    flxD1 = [x.fluxDensity.v for pair in blocksList for x in pair]
+    flxD2 = [x.fluxDensity2 for pair in blocksList for x in pair]
+    da = [np.float32(x.diskAngle.v) for pair in blocksList for x in pair]
 
-    return areas
+    return flxD1, flxD2, da
 
-def block_field(mgnt, blocks, raw=False):
-    """Given a list of blocks, will calculate and print out mean flux density."""
-    #TODO: add raw/corrected field support0
-    field = []
-    for block in blocks:
-        try:
-            field.append(block.mean_field())
-        except:
-            field.append(M(np.nan, np.nan))
-    return field
-
-def block_flux(mgnt, blocks):
-    """Given a list of blocks, will calculate and print out total flux."""
-
-    flux = []
-    for block in blocks:
-        try:
-            flux.append(block.sum_flux())
-        except AttributeError:
-            mgnt.magnetic_flux()
-            flux.append(block.sum_flux())
-        except:
-            flux.append(M(np.nan, np.nan))
-
-    return flux
-
-def calc_block_parameters(m, blockList, uncertainty=False):
-    """Extracts values from block parameters and outputs ndarrays."""
-    printInfo('Calculating block parameters...')
-    ar = np.array([x.v for x in block_area(m, blockList)])
-    f = np.array([x.v for x in block_field(m, blockList)])
-    da = np.array([np.float32(x.diskAngle.v) for x in blockList])
-
-    if uncertainty:
-        ar_unc = np.array([x.u for x in block_area(m, blockList)])
-        f_unc = np.array([x.u for x in block_field(m, blockList)])
-        da_unc = np.array([np.float32(x.diskAngle.u) for x in blockList])
-        return ar, f, da, ar_unc, f_unc, da_unc
-
-    return ar, f, da
 
 def printInfo(str):
     if info:
