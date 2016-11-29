@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 
 class Measurement:
     #Set array priority to override some of ndarray's ufunc binary relations
@@ -192,6 +193,8 @@ class Measurement:
         try:
             i = 0
             unc = 0
+            if np.isnan(array.v).all() or len(array.v) == 0:
+                return Measurement(np.nan, np.nan)
             val = np.nanmean(array.v)
             for u in np.nditer(array.u):
                 if np.isfinite(u):
@@ -199,7 +202,11 @@ class Measurement:
                     i +=1
             return Measurement(val, np.sqrt(unc)/i)
         except AttributeError:
+            if np.isnan(array).all() or len(array) == 0:
+                return np.nan
             return np.nanmean(array)
+
+
     def isfinite(array):
         try:
             return np.isfinite(array.v)

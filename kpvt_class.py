@@ -44,9 +44,6 @@ class Ch512Map(sunpy.map.GenericMap):
 
         self.data = self.data[2,:,:]
 
-
-
-
     @property
     def scale(self):
 
