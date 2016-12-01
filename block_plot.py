@@ -10,6 +10,7 @@ from scipy.odr import *
 from itertools import cycle, islice
 from mpl_toolkits.axes_grid1 import AxesGrid
 import random
+import quadrangles as quad
 
 __authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
 __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
@@ -108,43 +109,17 @@ def fit_xy(x, y, ax, **kwargs):
     ax.callbacks.connect('xlim_changed', callback)
     ax.callbacks.connect('ylim_changed', callback)
 
-def hist(p):
-    """Deprecated. Calculates a 2D histogram and plots it."""
-    x, y = combine_field_arrays(p)
-    ind = np.where(np.logical_and(np.isfinite(x), np.isfinite(y)))
-    H, xedges, yedges = np.histogram2d(x[ind], y[ind], bins=1000)
-    Hmasked = np.ma.masked_where(H==0, H)
-    fig = plt.figure(1)
-    ax = fig.add_subplot(111)
-    ax.pcolormesh(xedges, yedges, Hmasked, cmap='plasma')
-    plt.show()
-
-def hist_colored(p):
-    """Deprecated. Calculates a 2D histogram and plots it."""
-    x, y = combine_field_arrays(p)
-    ind = np.where(np.logical_and(np.isfinite(x), np.isfinite(y)))
-    hist, xedges, yedges = np.histogram2d(x[ind], y[ind], bins=1000)
-    xidx = np.clip(np.digitize(x, xedges), 0, hist.shape[0]-1)
-    yidx = np.clip(np.digitize(y, yedges), 0, hist.shape[1]-1)
-    c = hist[xidx, yidx]
-    sortedInds = np.argsort(c)
-    plt.scatter(x[sortedInds], y[sortedInds], c=c[sortedInds],
-            edgecolors='face', cmap='plasma')
-
-    plt.show()
-
-def hist_axis(p, diskLimits=[0,90], **kwargs):
+def hist_axis(bl, diskLimits=[0,90], **kwargs):
     """Returned parameters for multiple histograms."""
     b = kwargs.pop('binCount', 100)
     constant = kwargs.pop('const', 'width')
 
-    y, x = combine_field_arrays(p)
+    y, x, da = quad.extract_list_parameters(bl)
     minimum = np.nanmin(x)
     maximum = np.nanmax(x)
-    c, c2 = combine_field_arrays(p, option='color')
     ind = np.where(np.logical_and(
             np.logical_and(np.isfinite(x), np.isfinite(y)),
-            np.logical_and(c > diskLimits[0], c < diskLimits[1])
+            np.logical_and(da > diskLimits[0], da < diskLimits[1])
             )
         )
     x = x[ind]
@@ -183,33 +158,6 @@ def get_hist_info(data, b, sM):
     return {'med': med, 'mea': mea, 'std': std, 'data': data,
             'b': b, 'sliceMed': sM}
 
-def hist_plot(histList, y, skip, ax):
-    """Deprecated"""
-    minVal = np.min(histList[0]['data'])
-    maxVal = np.max(histList[-1]['data'])
-    medians = np.array([x['med'] for x in histList])
-    lims = max(abs(minVal*1.10), abs(maxVal*1.10))
-    print(lims)
-    norm = colors.Normalize(int(medians.min()), int(medians.max()))
-    lines = ["-","--"]
-    linecycler = cycle(lines)
-    for i in range(0, len(histList), skip):
-        d = histList[i]['data']
-        b = histList[i]['b']
-        ax.hist(d, bins=b, histtype='step', normed=True,
-                orientation='horizontal', color=cm.viridis(norm(medians[i])), 
-                linewidth=3, linestyle=next(linecycler))
-        ax.hist(d, bins=b, histtype='stepfilled', normed=True,
-                orientation='horizontal', color=cm.viridis(norm(medians[i])), 
-                alpha=.15)
-        try:
-            #ax.set_ylim(-lims, lims)
-            pass
-        except IndexError:
-            pass
-            #ax.set_ylim(xedges[minInd], xedges[-1])
-    #plt.xscale('log', nonposy='clip')
-
 def scatter_plot(dict1, dict2, separate=False):
     """Plots different blocked n values. Deprecated."""
     i = 1
@@ -225,15 +173,15 @@ def scatter_plot(dict1, dict2, separate=False):
         i += 1
     plt.show()
 
-def box_plot(p, dL, ax, clr='blue', **kwargs):
+def box_plot(bl, dL, ax, clr='blue', **kwargs):
     """Creates a box plot and sets properties."""
-    hl, x, y = hist_axis(p, dL, **kwargs)
+    hl, x, y = hist_axis(bl, dL, **kwargs)
     medians = np.array([x['med'] for x in hl])
     xPos = [s['sliceMed'] for s in hl]
     boxList = [s['data'] for s in hl]
     lims = max(abs(xPos[0]*1.10), abs(xPos[-1]*1.10))
     box = ax.boxplot(boxList, widths=5, positions=xPos, manage_xticks=False,
-            whis=[2.5, 97.5], sym="", showcaps=False,
+            whis=[10, 90], sym="", showcaps=False,
             whiskerprops=dict(linestyle='-', color=clr), patch_artist=True)
     ax.set(aspect='equal')
     add_identity(ax, color='.3', ls='--', zorder=1)
@@ -244,19 +192,19 @@ def box_plot(p, dL, ax, clr='blue', **kwargs):
 
     return hl
 
-def box_grid(p, bl, d, diskCuts=[0, 30, 45, 70], **kwargs):
+def box_grid(bl, diskCuts=[0, 30, 45, 70], **kwargs):
     """Splits box plots into sections of degrees from disk center."""
 
-    i1 = bl[0][0][0].mgnt.im_raw.instrument
-    i2 = bl[0][0][0].mgnt.im_raw.instrument
-    tDiff = str(abs((d[0][0] - d[0][1]).total_seconds()//3600)) + ' hours'
+    i1 = bl[0][0].i1
+    i2 = bl[0][0].i2
+    tDiff = str(abs((bl[0][0].date1 - bl[0][0].date2).total_seconds()//3600)) + ' hours'
     hl = []
     f, grid = plt.subplots(1, 3, sharey=True, figsize=(24, 13))
     f.subplots_adjust(left=.05, right=.92, bottom=.20, top=.75, wspace=0)
     colors = [(80/255, 60/255, 0), (81/255, 178/255, 76/255), (114/255, 178/255, 229/255)]
     grid[0].set_ylim(-200, 200)
     for i in range(len(diskCuts)-1):
-        hl.append(box_plot(p, diskCuts[i:i+2], grid[i], clr=colors[i], **kwargs))
+        hl.append(box_plot(bl, diskCuts[i:i+2], grid[i], clr=colors[i], **kwargs))
         hl[i][0]['c'] = colors[i]
         grid[i].set_xlim(grid[0].get_ylim())
         grid[i].set_aspect('equal')
@@ -279,26 +227,79 @@ def box_grid(p, bl, d, diskCuts=[0, 30, 45, 70], **kwargs):
     add_box_legend(grid, diskCuts)
     f.savefig('pict.png', bbox_inches='tight', pad_inches = 0.1)
 
-def variance_plot(p, dL, ax, clr='blue', **kwargs):
-    hl, x, y = hist_axis(p, dL, **kwargs)
+def violin_plot(bl, dL, ax, clr='blue', **kwargs):
+    """Creates a box plot and sets properties."""
+    hl, x, y = hist_axis(bl, dL, **kwargs)
+    medians = np.array([x['med'] for x in hl])
+    xPos = [s['sliceMed'] for s in hl]
+    boxList = [s['data'] for s in hl]
+    lims = max(abs(xPos[0]*1.10), abs(xPos[-1]*1.10))
+    vio = ax.violinplot(boxList, widths=5, positions=xPos,
+            showmeans=True)
+    ax.set(aspect='equal')
+    add_identity(ax, color='.3', ls='--', zorder=1)
+    i = 0
+    # for bx in box['boxes']:
+    #     bx.set(edgecolor=clr, facecolor=clr, alpha=.75)
+    #     i += 1
+
+    return 
+
+def violin_grid(bl, diskCuts=[0, 30, 45, 70], **kwargs):
+    """Splits box plots into sections of degrees from disk center."""
+
+    i1 = bl[0][0].i1
+    i2 = bl[0][0].i2
+    tDiff = str(abs((bl[0][0].date1 - bl[0][0].date2).total_seconds()//3600)) + ' hours'
+    hl = []
+    f, grid = plt.subplots(1, 3, sharey=True, figsize=(24, 13))
+    f.subplots_adjust(left=.05, right=.92, bottom=.20, top=.75, wspace=0)
+    colors = [(80/255, 60/255, 0), (81/255, 178/255, 76/255), (114/255, 178/255, 229/255)]
+    grid[0].set_ylim(-200, 200)
+    for i in range(len(diskCuts)-1):
+        hl.append(box_plot(bl, diskCuts[i:i+2], grid[i], clr=colors[i], **kwargs))
+        hl[i][0]['c'] = colors[i]
+        grid[i].set_xlim(grid[0].get_ylim())
+        grid[i].set_aspect('equal')
+
+    grid[1].xaxis.set_ticks_position('top')
+    grid[0].set_ylabel(i1 + ' Field (G)', labelpad=-.75)
+    grid[2].set_ylabel(i1 + ' Field (G)', labelpad=25, rotation=270)
+    grid[2].yaxis.set_ticks_position('right')
+    grid[2].yaxis.set_label_position('right')
+    f.text(.45, .17, i2 + ' Field (G)')
+    fig_title = "Time Difference Between Magnetograms: " + tDiff
+    f.suptitle(fig_title, y=.83, fontsize=30, fontweight='bold')
+
+    lines = ["-","--", ":"]
+    linecycler = cycle(lines)
+
+    for ax, h in itertools.product(grid, hl):
+        fit_medians(ax, h, color=h[0]['c'], linewidth=3, linestyle=next(linecycler), zorder=1)
+
+    add_box_legend(grid, diskCuts)
+    f.savefig('pict.png', bbox_inches='tight', pad_inches = 0.1)
+
+def variance_plot(bl, dL, ax, clr='blue', **kwargs):
+    hl, x, y = hist_axis(bl, dL, **kwargs)
     medians = np.array([x['med'] for x in hl])
     stdevs = np.array([s['std'] for s in hl])
 
-    box = ax.plot(np.abs(medians), np.abs(stdevs/medians), '.', color=clr, markersize=10, **kwargs)
+    variance = ax.plot(np.abs(medians), np.abs(stdevs/medians), '.', color=clr, markersize=10, **kwargs)
 
     return hl
 
-def variance_grid(p, bl, d, diskCuts=[0, 20, 45, 90], **kwargs):
-    i1 = bl[0][0][0].mgnt.im_raw.instrument
-    i2 = bl[0][0][0].mgnt.im_raw.instrument
-    tDiff = str(abs((d[0][0] - d[0][1]).total_seconds()//3600)) + ' hours'
+def variance_grid(bl, diskCuts=[0, 20, 45, 90], **kwargs):
+    i1 = bl[0][0].i1
+    i2 = bl[0][0].i2
+    tDiff = str(abs((bl[0][0].date1 - bl[0][0].date2).total_seconds()//3600)) + ' hours'
     hl = []
     f, grid = plt.subplots(1, 3, sharey=True, figsize=(24, 13))
     f.subplots_adjust(left=.05, right=.92, bottom=.20, top=.75, wspace=0)
     colors = [(80/255, 60/255, 0), (81/255, 178/255, 76/255), (114/255, 178/255, 229/255)]
     grid[0].set_ylim(0, 1.5)
     for i in range(len(diskCuts)-1):
-        hl.append(variance_plot(p, diskCuts[i:i+2], grid[i], clr=colors[i], **kwargs))  
+        hl.append(variance_plot(bl, diskCuts[i:i+2], grid[i], clr=colors[i], **kwargs))  
         hl[i][0]['c'] = colors[i]
         grid[i].set_xlim(0, 200)
         #grid[i].set_aspect('equal')
@@ -364,7 +365,7 @@ def add_box_legend(axes, cuts):
     axes[2].legend(loc=2, handles=[blue_patch], frameon=False)
 
 
-def plot_block_parameters(*args):
+def plot_block_parameters(bl):
     """
     Accepts any number of p-tuples and creates scatter plots.
 
@@ -372,139 +373,50 @@ def plot_block_parameters(*args):
     for each instrument are calculated from the quadrangles
     module.
     """
-    f, ax = plt.subplots(1,3, num=1)
+    f, ax = plt.subplots(1,2, num=1)
     co = 'viridis'
     plt.rc('text', usetex=True)
-    ar_i1, ar_i2 = combine_field_arrays(args, option='area')
-    f_i1, f_i2 = combine_field_arrays(args, option='field')
-    c, c2 = combine_field_arrays(args, option='color')
     
-    ind = np.where(np.abs((ar_i1 - ar_i2)/ar_i1) < .10)
-    c_valid = c[ind]
-    sortedInds = np.argsort(c_valid)
-    #ar_i1 = ar_i1[ind][sortedInds]
-    #ar_i2 = ar_i2[ind][sortedInds]
-    f_i1 = f_i1[ind][sortedInds]
-    f_i2 = f_i2[ind][sortedInds]
+    y, x, da = quad.extract_list_parameters(bl)
+    sortedInds = np.argsort(da)
+    f_i1 = y[sortedInds]
+    f_i2 = x[sortedInds]
 
-    f1_valid = (np.abs(f_i1) > 1)
-    f2_valid = (np.abs(f_i2) > 1)
-    s = f1_valid & f2_valid
-
-    #-----------------------------Area Plot-------------------------------------
-    ax[0].scatter(ar_i2, ar_i1, cmap=co,
-            vmin=0, vmax=90, edgecolors='face', zorder=2)
-    ax[0].set_xlim(ax[0].get_ylim())
+    f1LogValid = (np.abs(y) > 1)
+    f2LogValid = (np.abs(x) > 1)
+    s = f1LogValid & f2LogValid
 
     #--------------------------Mean Field Plot----------------------------------
-    ax[1].scatter(f_i2, f_i1, cmap=co, c=c_valid,
+    ax[0].scatter(f_i2, f_i1, cmap=co, c=da,
             vmin=0, vmax=90, edgecolors='face', zorder=2)
     maxField = max(np.nanmax(f_i1), np.nanmax(f_i2))
-    ax[1].set_ylim(-maxField, maxField)
-    ax[1].set_xlim(ax[1].get_ylim())
+    ax[0].set_ylim(-maxField, maxField)
+    ax[0].set_xlim(ax[0].get_ylim())
 
     #-----------------------Mean Field Plot Log Scale---------------------------
     x1 = np.log10(np.abs(f_i2[s]))
     y1 = np.log10(np.abs(f_i1[s]))
-    plots = ax[2].scatter(x1*np.sign(f_i2[s]), y1*np.sign(f_i1[s]),
-        cmap=co, c=c_valid[s], vmin=0, vmax=90, edgecolors='face', zorder=2)
+    plots = ax[1].scatter(x1*np.sign(f_i2[s]), y1*np.sign(f_i1[s]),
+        cmap=co, c=da[s], vmin=0, vmax=90, edgecolors='face', zorder=2)
     maxLogField = max(np.nanmax(x1), np.nanmax(y1))
-    ax[2].set_ylim(-maxLogField, maxLogField)
-    ax[2].set_xlim(ax[2].get_ylim())
+    ax[1].set_ylim(-maxLogField, maxLogField)
+    ax[1].set_xlim(ax[1].get_ylim())
 
     #------------------------Finish Plot Properties-----------------------------
     set_p_plot_properties(ax)
-    #fit_mean_field(ax[1], args)
-    #fit_mean_field_unc(ax[1], args)
-    #cbar.ax.set_ylabel('Degrees from disk center')
-    f.subplots_adjust(left=.05, right=.89, bottom=.29, top=.71, wspace=.15)
+    f.subplots_adjust(left=.05, right=.89, bottom=.08, top=.96, wspace=.10)
     cbar_ax = f.add_axes([.90, .29, .03, .42])
     f.colorbar(plots, cax=cbar_ax)
     return f
-
-def n_plot(n_dict):
-    """Plots a dictionary of n values"""
-    NList = []
-    TList = []
-    for key, value in n_dict.items():
-        NList.append(key)
-        TList.append(len(value))
-    N = np.array(NList)
-    T = np.array(TList)
-    plt.plot(N, T, '.')
-
-    plt.show()
-
-def block_plot(*args, overlay=True):
-    """Given a list of blocks, will plot a nice image differentiating them.
-
-    --Optional arguments--
-    overlay: Toggle for quadrangles if you want to show over magnetogram."""
-    n = len(args)
-    print(n)
-    rows = int(round(np.sqrt(n)))
-    cols = int(np.ceil(np.sqrt(n)))
-    im = {}
-    ax = {}
-    for i in range(len(args)):
-        print(i)
-        if isinstance(args[i], type(list())):
-            im[i] = args[i][0].mgnt.lonh.v.copy()
-            im[i][:] = np.nan
-            for x in args[i]:
-                im[i][x.indices] = x.pltColor
-            ax[i] = plt.subplot2grid((rows, cols), (i%rows, i//rows))
-            if overlay:
-                ax[i].imshow(args[i][0].mgnt.im_raw.data, cmap='binary')
-                ax[i].imshow(im[i], vmin=0, vmax=1, alpha=.2)
-            else:
-                ax[i].imshow(im[i], vmin=0, vmax=1)
-            title = "{}: {}".format(args[i][0].mgnt.im_raw.instrument, 
-                    args[i][0].mgnt.im_raw.date.isoformat())
-            ax[i].set_title(title)
-        else:
-            im[i] = args[i]
-            ax[i] = plt.subplot2grid((rows, cols), (i%rows, i//rows))
-            ax[i].imshow(im[i], cmap='binary')
-
-    return ax
-
-def combine_field_arrays(p, unc=False, option='field'):
-    """Takes in a list of p-values and returns a concatenated numpy array."""
-    x = np.array([])
-    xUnc = np.array([])
-    y = np.array([])
-    yUnc = np.array([])
-    if option == 'area':
-        i = 0
-    elif option == 'field':
-        i =  1
-    elif option == 'color':
-        i = 2
-    for s in range(len(p)):
-        x = np.append(x, p[s][0][i])
-        y = np.append(y, p[s][1][i])
-        if unc:
-            xUnc = np.append(xUnc, p[s][0][i + 3])
-            yUnc = np.append(yUnc, p[s][1][i + 3])
-
-    if unc:
-        return x, y, xUnc, yUnc
-    else:
-        return x, y
 
 def set_p_plot_properties(ax):
     """Sets the scatter plot properties."""
     add_identity(ax[0], color='.3', ls='--', zorder=1)
     add_identity(ax[1], color='.3', ls='--', zorder=1)
-    add_identity(ax[2], color='.3', ls='--', zorder=1)
 
-    ax[0].set_title('Block Areas')
-    ax[1].set_title('Mean Field')
-    ax[0].set(aspect='equal', xlabel=r'Area (cm^2)',
-            ylabel=r'Reference Area (cm^2)')
-    ax[1].set(aspect='equal', xlabel=r'B Field (G)',
+    ax[0].set_title('Mean Field')
+    ax[0].set(aspect='equal', xlabel=r'B Field (G)',
             ylabel=r'Reference B Field (G)')
-    ax[2].set_title('Logarithm Space of Fields')
-    ax[2].set(aspect='equal', xlabel=r'Logarithmic B Field (log(B))',
+    ax[1].set_title('Logarithm Space of Fields')
+    ax[1].set(aspect='equal', xlabel=r'Logarithmic B Field (log(B))',
             ylabel=r'Reference Logarithmic B Field (log(B))')

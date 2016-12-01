@@ -17,6 +17,7 @@ class Quadrangle:
     def __init__(self, mgnt, i, ID, m2=None):
         """Accepts heliographic bounds and a list of indices for block """
         self.id = ID
+        self.i1 = mgnt.im_raw.instrument
         self.date1 = mgnt.im_raw.date
         self.lat = (self.min_latitude(mgnt, i), self.max_latitude(mgnt, i))
         self.lon = (self.min_longitude(mgnt, i), self.max_longitude(mgnt, i))
@@ -26,6 +27,7 @@ class Quadrangle:
         if m2 is not None:
             self.fluxDensity2 = self.mean_flux_density(m2.remap, i)
             self.date2 = m2.im_raw.date
+            self.i2 = m2.im_raw.instrument
 
 
     def min_latitude(self, m, ind):
@@ -210,12 +212,16 @@ def _transform_indices(ind, l):
 def extract_list_parameters(blocksList):
     """Takes a list of day pairs and extracts elements from them."""
 
-    flxD1 = [x.fluxDensity.v for pair in blocksList for x in pair]
-    flxD2 = [x.fluxDensity2 for pair in blocksList for x in pair]
-    da = [np.float32(x.diskAngle.v) for pair in blocksList for x in pair]
+    flxD1 = np.array([x.fluxDensity.v for pair in blocksList for x in pair])
+    flxD2 = np.array([x.fluxDensity2 for pair in blocksList for x in pair])
+    da = np.array([np.float32(x.diskAngle.v) for pair in blocksList for x in pair])
+
+    # ind = np.where(np.logical_and( np.logical_or(np.abs(flxD1/flxD2) > 10, np.abs(flxD2/flxD1) > 10), (np.maximum(np.abs(flxD1),np.abs(flxD2)) > 15)))
+    # flxD1[ind] = np.nan
+    # flxD2[ind] = np.nan
+    # da[ind] = np.nan
 
     return flxD1, flxD2, da
-
 
 def printInfo(str):
     if info:

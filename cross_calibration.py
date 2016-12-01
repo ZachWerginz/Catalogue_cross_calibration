@@ -181,45 +181,49 @@ def fix_longitude(f1, f2):
     considering they will only be off by some constant.
     """
 
-    m1 = CRD(f1)
-    m2 = CRD(f2)
-    print(m1.im_raw.date)
-    print(m2.im_raw.date)
-    m1.heliographic()
-    m2.heliographic()
-    m1.magnetic_flux()
-    m2.magnetic_flux()
+    mgnt1 = CRD(f1)
+    mgnt2 = CRD(f2)
+    print(mgnt1.im_raw.date)
+    print(mgnt2.im_raw.date)
+    mgnt1.heliographic()
+    mgnt2.heliographic()
+    mgnt1.magnetic_flux()
+    mgnt2.magnetic_flux()
     # Don't need right away for looking at consistency
     # m1.magnetic_flux()
     # m2.magnetic_flux()
     #Apply differential Rotation
-    rotation = z.diff_rot(m1, m2)
-    m2.lonhOld = m2.lonh
-    m2.lonh = rotation.value + m2.lonh
-    if m2.im_raw.dimensions[0].value > m1.im_raw.dimensions[0].value:
-        interpolate_remap(m2, m1)
+    rotation = z.diff_rot(mgnt1, mgnt2)
+    mgnt2.lonhOld = mgnt2.lonh
+    mgnt2.lonh = rotation.value + mgnt2.lonh
+    if mgnt2.im_raw.dimensions[0].value > mgnt1.im_raw.dimensions[0].value:
+        interpolate_remap(mgnt2, mgnt1)
+        return mgnt2, mgnt1
     else:
-        interpolate_remap(m1, m2)
-
-    return m1, m2
-
+        interpolate_remap(mgnt1, mgnt2)
+        return mgnt1, mgnt2
+    
 def interpolate_remap(m1, m2):
 
-    x = m2.lath.v.flatten()
-    y = m2.lonh.v.flatten()
-    values = m2.im_raw.data.flatten()
-    xi = m1.lath.v.flatten()
-    yi = m1.lonh.v.flatten()
-    dim = m2.im_raw.dimensions
+    x2 = m2.lath.v.flatten()
+    y2 = m2.lonh.v.flatten()
+    v2 = m2.im_raw.data.flatten()
+    x1 = m1.lath.v.flatten()
+    y1 = m1.lonh.v.flatten()
+    dim1 = m1.im_raw.dimensions
 
-    ind2 = np.where(np.logical_and(np.isfinite(x), np.isfinite(values)))
-    ind1 = np.where(np.isfinite(xi))
+    latitudeMask = np.where(np.abs(x2) < 50)
+    minimum = max(np.nanmin(y2[latitudeMask]),np.nanmin(y1[latitudeMask]))
+    maximum = min(np.nanmax(y2[latitudeMask]), np.nanmax(y1[latitudeMask]))
 
-    interp_data = griddata((x[ind2], y[ind2]), values[ind2], (xi[ind1], yi[ind1]), method='cubic')
-    new_m2 = np.full((int(dim[0].value), int(dim[1].value)), np.nan)
+    ind2 = np.where(np.logical_and(np.logical_and(np.isfinite(y2), np.isfinite(v2)) ,np.logical_and(y2 > minimum, y2 < maximum)))
+    ind1 = np.where(np.logical_and(np.isfinite(y1), np.logical_and(y2 > minimum, y2 < maximum)))
+
+    interp_data = griddata((x2[ind2], y2[ind2]), v2[ind2], (x1[ind1], y1[ind1]), method='cubic')
+    new_m2 = np.full((int(dim1[0].value), int(dim1[1].value)), np.nan)
 
     new_m2.ravel()[ind1] = interp_data
-    new_m2.ravel()[(m1.rg.v.flatten() > m1.rsun*np.sin(75.0*np.pi/180))] = np.nan
+    #new_m2.ravel()[(m1.rg.v.flatten() > m1.rsun*np.sin(75.0*np.pi/180))] = np.nan
 
     m2.remap = new_m2
 
@@ -274,20 +278,6 @@ def select_pair(par):
         k += 1
     choice = int(input("Select a pair: "))
     return files[choice]
-
-def del_bad(p, d):
-    bad = []
-    for i in range(len(p)):
-        if len(np.where(p[i][1][2]/p[i][0][2] > 100)[0]) > 10:
-            bad.append(i)
-            continue
-        if len(np.where(p[i][0][2]/p[i][1][2] > 100)[0]) > 10:
-            bad.append(i)
-
-    for i in sorted(bad, reverse=True):
-        del p[i]
-        del d[i]
-
 
 def main():
     """
