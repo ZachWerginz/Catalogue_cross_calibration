@@ -114,7 +114,8 @@ def hist_axis(bl, diskLimits=[0,90], **kwargs):
     b = kwargs.pop('binCount', 100)
     constant = kwargs.pop('const', 'width')
 
-    y, x, da = quad.extract_list_parameters(bl)
+    y, x, da = quad.extract_valid_points(bl)
+
     minimum = np.nanmin(x)
     maximum = np.nanmax(x)
     ind = np.where(np.logical_and(
@@ -195,9 +196,9 @@ def box_plot(bl, dL, ax, clr='blue', **kwargs):
 def box_grid(bl, diskCuts=[0, 30, 45, 70], **kwargs):
     """Splits box plots into sections of degrees from disk center."""
 
-    i1 = bl[0][0].i1
-    i2 = bl[0][0].i2
-    tDiff = str(abs((bl[0][0].date1 - bl[0][0].date2).total_seconds()//3600)) + ' hours'
+    i1 = bl['i1']
+    i2 = bl['i2']
+    tDiff = str(bl['timeDifference'].total_seconds()/3600) + ' hours'
     hl = []
     f, grid = plt.subplots(1, 3, sharey=True, figsize=(24, 13))
     f.subplots_adjust(left=.05, right=.92, bottom=.20, top=.75, wspace=0)
@@ -290,9 +291,9 @@ def variance_plot(bl, dL, ax, clr='blue', **kwargs):
     return hl
 
 def variance_grid(bl, diskCuts=[0, 20, 45, 90], **kwargs):
-    i1 = bl[0][0].i1
-    i2 = bl[0][0].i2
-    tDiff = str(abs((bl[0][0].date1 - bl[0][0].date2).total_seconds()//3600)) + ' hours'
+    i1 = bl['i1']
+    i2 = bl['i2']
+    tDiff = str(bl['timeDifference'].total_seconds()/3600) + ' hours'
     hl = []
     f, grid = plt.subplots(1, 3, sharey=True, figsize=(24, 13))
     f.subplots_adjust(left=.05, right=.92, bottom=.20, top=.75, wspace=0)
@@ -304,42 +305,11 @@ def variance_grid(bl, diskCuts=[0, 20, 45, 90], **kwargs):
         grid[i].set_xlim(0, 200)
         #grid[i].set_aspect('equal')
 
-    grid[0].set_ylabel(i1 + ' Field (G)', labelpad=-.75)
-    grid[2].set_ylabel(i1 + ' Field (G)', labelpad=25, rotation=270)
     grid[2].yaxis.set_ticks_position('right')
     grid[2].yaxis.set_label_position('right')
 
     fig_title = "Time Difference Between Magnetograms: " + tDiff
     f.suptitle(fig_title, y=.83, fontsize=30, fontweight='bold')
-
-    lines = ["-","--", ":"]
-    linecycler = cycle(lines)
-
-    for ax, h in itertools.product(grid, hl):
-        x = np.array([x['med'] for x in h])
-        y = np.array([s['std'] for s in h])/x
-        fit_xy(np.abs(x), np.abs(y), ax, color=h[0]['c'], linewidth=3, linestyle=next(linecycler), zorder=1)
-
-    add_box_legend(grid, diskCuts)
-
-def var2_grid(p, bl, d, p2, diskCuts=[0, 20, 45, 90], **kwargs):
-    i1 = bl[0][0][0].mgnt.im_raw.instrument
-    i2 = bl[0][0][0].mgnt.im_raw.instrument
-    tDiff = str(abs((d[0][0] - d[0][1]).total_seconds()//3600)) + ' hours'
-    hl1 = []
-    hl2 = []
-    f, grid = plt.subplots(1, 3, sharey=True, figsize=(24, 13))
-    f.subplots_adjust(left=.05, right=.92, bottom=.20, top=.75, wspace=0)
-    colors = [(80/255, 60/255, 0), (81/255, 178/255, 76/255), (114/255, 178/255, 229/255)]
-    grid[0].set_ylim(0, 1.5)
-    for i in range(len(diskCuts)-1):
-        hl1.append(variance_plot(p, diskCuts[i:i+2], grid[i], clr=colors[i], **kwargs))
-        hl2.append(variance_plot(p2, diskCuts[i:i+2], grid[i], clr=colors[i], marker='*', **kwargs))
-        grid[i].set_xlim(0, 200)
-        #grid[i].set_aspect('equal')
-
-    grid[2].yaxis.set_ticks_position('right')
-    grid[2].yaxis.set_label_position('right')
 
     lines = ["-","--", ":"]
     linecycler = cycle(lines)
@@ -350,7 +320,6 @@ def var2_grid(p, bl, d, p2, diskCuts=[0, 20, 45, 90], **kwargs):
     #     fit_xy(np.abs(x), np.abs(y), ax, color=h[0]['c'], linewidth=3, linestyle=next(linecycler), zorder=1)
 
     add_box_legend(grid, diskCuts)
-
 
 def add_box_legend(axes, cuts):
     c1 = cuts[0]
@@ -364,7 +333,6 @@ def add_box_legend(axes, cuts):
     axes[1].legend(loc=2, handles=[green_patch], frameon=False)
     axes[2].legend(loc=2, handles=[blue_patch], frameon=False)
 
-
 def plot_block_parameters(bl):
     """
     Accepts any number of p-tuples and creates scatter plots.
@@ -377,7 +345,7 @@ def plot_block_parameters(bl):
     co = 'viridis'
     plt.rc('text', usetex=True)
     
-    y, x, da = quad.extract_list_parameters(bl)
+    y, x, da = quad.extract_valid_points(bl)
     sortedInds = np.argsort(da)
     f_i1 = y[sortedInds]
     f_i2 = x[sortedInds]

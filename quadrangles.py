@@ -23,7 +23,7 @@ class Quadrangle:
         self.lon = (self.min_longitude(mgnt, i), self.max_longitude(mgnt, i))
         self.diskAngle = self.averageDA(mgnt, i)
         self.area = self.sum_area(mgnt, i)
-        self.fluxDensity = self.mean_flux_density(mgnt.im_raw_u, i)
+        self.fluxDensity = self.mean_flux_density(mgnt.im_corr, i)
         if m2 is not None:
             self.fluxDensity2 = self.mean_flux_density(m2.remap, i)
             self.date2 = m2.im_raw.date
@@ -85,7 +85,7 @@ def fragment_multiple(m1, m2, n):
     
     return blocks
 
-def get_fragmentation_info(m, n, lonBands=None):
+def get_fragmentation_info(m, n):
     """
     Inputs a mgnt and segmentation level (n) and outputs dict of parameters.
 
@@ -99,8 +99,7 @@ def get_fragmentation_info(m, n, lonBands=None):
 
     # This supports reusing latitude and longitude bands for other mgnts.
     latBands = _split(n)
-    if lonBands is None:
-        lonBands = _split(n, M.nanmin(m.lonh), M.nanmax(m.lonh))
+    lonBands = _split(n, M.nanmin(m.lonh), M.nanmax(m.lonh))
     lonMasks = []
 
     for lon in lonBands:
@@ -157,7 +156,8 @@ def fragmentation_loop(refFragInfo, secmgnt=None):
                 continue
             else:
                 blockInd = _transform_indices(mgnt.ind_1d[blockBool], l)
-                x = Quadrangle(mgnt, blockInd, uuid, secmgnt)
+                x = Quadrangle(mgnt, blockInd, int(uuid), secmgnt)
+                x.fragmentationValue = n
                 blocks.append(x)
         currLat = nextLat
 
@@ -209,17 +209,17 @@ def _transform_indices(ind, l):
     rows = ind // l
     return (rows, cols)
 
-def extract_list_parameters(blocksList):
-    """Takes a list of day pairs and extracts elements from them."""
+def extract_valid_points(bl):
+    """Extracts the valid points from the dictionary set."""
 
-    flxD1 = np.array([x.fluxDensity.v for pair in blocksList for x in pair])
-    flxD2 = np.array([x.fluxDensity2 for pair in blocksList for x in pair])
-    da = np.array([np.float32(x.diskAngle.v) for pair in blocksList for x in pair])
+    flxD1 = bl['referenceFD']
+    flxD2 = bl['secondaryFD']
+    da = bl['diskangle']
 
-    # ind = np.where(np.logical_and( np.logical_or(np.abs(flxD1/flxD2) > 10, np.abs(flxD2/flxD1) > 10), (np.maximum(np.abs(flxD1),np.abs(flxD2)) > 15)))
-    # flxD1[ind] = np.nan
-    # flxD2[ind] = np.nan
-    # da[ind] = np.nan
+    ind = np.where(np.logical_and( np.logical_or(np.abs(flxD1/flxD2) > 10, np.abs(flxD2/flxD1) > 10), (np.maximum(np.abs(flxD1),np.abs(flxD2)) > 15)))
+    flxD1[ind] = np.nan
+    flxD2[ind] = np.nan
+    da[ind] = np.nan
 
     return flxD1, flxD2, da
 

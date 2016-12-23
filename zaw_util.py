@@ -2,12 +2,20 @@ import os.path
 import glob
 import pickle
 import datetime as dt
-import pandas as pd
+import numpy as np
 from astropy.io import fits
 import astropy.units as u
 from zaw_coord import CRD
 import sunpy.time
 import sunpy.physics.differential_rotation as d
+import psycopg2 as psy
+
+psy.extensions.register_adapter(np.float32, psy._psycopg.AsIs)
+DEC2FLOAT = psy.extensions.new_type(
+    psy.extensions.DECIMAL.values,
+    'DEC2FLOAT',
+    lambda value, curs: float(value) if value is not None else None)
+psy.extensions.register_type(DEC2FLOAT)
 
 __authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
 __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
@@ -27,20 +35,43 @@ def dateOffset(instr):
     
     return dt.date(year, 1, 1)
 
-def load_instrument_overlap(i1, i2):
-    if i1 in ('512', 'spmg') and i2 in ('512', 'spmg'):
-        fn = 'overlap_files\\512_SPMG_overlap.pkl'
-    elif i1 in ('spmg', 'mdi') and i2 in ('spmg', 'mdi'):
-        fn = 'overlap_files\\SPMG_MDI_overlap.pkl'
-    elif i1 in ('mdi', 'hmi') and i2 in ('mdi', 'hmi'):
-        fn = 'overlap_files\\MDI_HMI_overlap.pkl'
+def load_database():
+    try:
+        conn = psy.connect("dbname='cross_calibration' user='zwerginz' host='minerva' password='8raSp6tr'")
+    except:
+        print ("I am unable to connect to the database")
+    return conn
 
-    with open(fn, 'rb') as f:
-        return pickle.load(f)
+def download_cc_data(i1, i2, n, tol1, tol2):
+    conn = load_database()
+    cur = conn.cursor()
 
-def load_match_database():
-    store = pd.HDFStore(os.path.join(data_root, 'db.h5'))
-    return store['ALL']
+    instrumentKey = {'512': 1, 'SPMG': 2, 'MDI': 3, 'HMI': 4}
+    
+    result = {}
+    cur.execute("SELECT referencefluxdensity, secondaryfluxdensity, diskangle \
+            FROM quadrangle q JOIN file a ON q.referencemag = a.id \
+            JOIN file b ON q.secondarymag = b.id \
+            WHERE fragmentationvalue = %s \
+            AND a.instrument = %s AND b.instrument = %s \
+            AND age(b.date, a.date) BETWEEN  INTERVAL %s AND  INTERVAL %s",
+            (n, instrumentKey[i1.upper()], instrumentKey[i2.upper()], tol1, tol2))
+
+    points = cur.fetchall()
+
+    y, x, da = zip(*points)
+
+    result['referenceFD'] = np.array(y)
+    result['secondaryFD'] = np.array(x)
+    result['diskangle'] = np.array(da)
+    result['i1'] = i1
+    result['i2'] = i2
+
+    cur.execute("SELECT INTERVAL %s - INTERVAL %s", (tol1, tol2))
+    result['timeDifference'] = cur.fetchone()[0]
+    cur.close()
+
+    return result
 
 def date_defaults(instr):
     if instr == '512':

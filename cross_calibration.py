@@ -8,16 +8,21 @@ import quadrangles as quad
 import block_plot as b
 import datetime as dt
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 import itertools
 from uncertainty import Measurement as M
 import random
-import sunpy.time
 import getopt
 import sys
 from timeparse import timeparse
 from scipy.interpolate import griddata
+import psycopg2 as psy
+
+psy.extensions.register_adapter(np.float32, psy._psycopg.AsIs)
+DEC2FLOAT = psy.extensions.new_type(
+    psy.extensions.DECIMAL.values,
+    'DEC2FLOAT',
+    lambda value, curs: float(value) if value is not None else None)
+psy.extensions.register_type(DEC2FLOAT)
 
 __authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
 __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
@@ -80,7 +85,7 @@ def process_date(i1, i2, date, timeTolerance=1):
 
     return result
 
-def process_instruments(i1, i2, par, retDates=False):
+def process_instruments(i1, i2, par):
     """
     Returns a list of valid file combinations.
 
@@ -89,49 +94,27 @@ def process_instruments(i1, i2, par, retDates=False):
     If retDates is set to true, it will also return a list of dates where
     matches were found.
     """
-    # if timeTolerance == 1 and retDates:
-    #     return z.load_instrument_overlap(i1, i2)
-    # elif timeTolerance == 1 and not retDates:
-    #     return z.load_instrument_overlap(i1, i2)[0]
-    # start_i1, end_i1 = z.date_defaults(i1)
-    # start_i2, end_i2 = z.date_defaults(i2)
-
-    # start = max(start_i1, start_i2)
-    # end = min(end_i1, end_i2)
-    # date = start
-    # files = []
-    # dates = []
-
-    # while date < end:
-    #     try:
-    #         files.extend(process_date(i1, i2, date, timeTolerance))
-    #         dates.append(date)
-    #     except IOError:
-    #         continue
-    #     finally:
-    #         date += dt.timedelta(1)
-
-    # if retDates:
-    #     return list(set(files)), dates
-    # else:
-    #     return list(set(files))
     tol1 = par['t1']
     tol2 = par['t2']
 
-    if i1 == '512': i1 = 'kpvt'
+    instrumentKey = {'512': 1, 'SPMG': 2, 'MDI': 3, 'HMI': 4}
 
-    df = z.load_match_database()
-    firstPass = df[
-        (df['File 1'].str.contains(i1.upper()) & df['File 2'].str.contains(i2.upper()))
-        | (df['File 1'].str.contains(i2.upper()) & df['File 2'].str.contains(i1.upper()))]
-    secondPass = firstPass[(firstPass['Time Difference'] < tol2) & (firstPass['Time Difference'] > tol1)]
-    res = [(x, y) for x, y in zip(secondPass['File 1'].values, secondPass['File 2'].values)]
+    conn = z.load_database()
+    cur = conn.cursor()
+    cur.execute("SELECT a.filepath AS f1, b.filepath AS f2 \
+            FROM file_time_diff main \
+            JOIN file a ON main.file1 = a.id \
+            JOIN file b ON main.file2 = b.id \
+            WHERE a.instrument = %s AND b.instrument = %s \
+            AND difference BETWEEN INTERVAL %s \
+            AND INTERVAL %s;", (instrumentKey[i1.upper()],
+            instrumentKey[i2.upper()], tol1, tol2))
+    
+    results = cur.fetchall()
+    cur.close()
+    conn.close()
 
-    if retDates:
-        dates = [x for x in secondPass['Date 1']]
-        return res, dates
-    else:
-        return res
+    return results
 
 def coordinate_compare(i1, i2):
     """
@@ -189,9 +172,6 @@ def fix_longitude(f1, f2):
     mgnt2.heliographic()
     mgnt1.magnetic_flux()
     mgnt2.magnetic_flux()
-    # Don't need right away for looking at consistency
-    # m1.magnetic_flux()
-    # m2.magnetic_flux()
     #Apply differential Rotation
     rotation = z.diff_rot(mgnt1, mgnt2)
     mgnt2.lonhOld = mgnt2.lonh
@@ -207,7 +187,7 @@ def interpolate_remap(m1, m2):
 
     x2 = m2.lath.v.flatten()
     y2 = m2.lonh.v.flatten()
-    v2 = m2.im_raw.data.flatten()
+    v2 = m2.im_corr.v.flatten()
     x1 = m1.lath.v.flatten()
     y1 = m1.lonh.v.flatten()
     dim1 = m1.im_raw.dimensions
@@ -217,7 +197,7 @@ def interpolate_remap(m1, m2):
     maximum = min(np.nanmax(y2[latitudeMask]), np.nanmax(y1[latitudeMask]))
 
     ind2 = np.where(np.logical_and(np.logical_and(np.isfinite(y2), np.isfinite(v2)) ,np.logical_and(y2 > minimum, y2 < maximum)))
-    ind1 = np.where(np.logical_and(np.isfinite(y1), np.logical_and(y2 > minimum, y2 < maximum)))
+    ind1 = np.where(np.logical_and(np.isfinite(y1), np.logical_and(y1 > minimum, y1 < maximum)))
 
     interp_data = griddata((x2[ind2], y2[ind2]), v2[ind2], (x1[ind1], y1[ind1]), method='cubic')
     new_m2 = np.full((int(dim1[0].value), int(dim1[1].value)), np.nan)
@@ -238,7 +218,26 @@ def run_multiple_n(m):
         n_dict_length[n] = len(N)
     return n_dict_length
 
-def compare_day(i1, i2, par, f1=None, f2=None):
+def upload_quadrangles(conn, b, workingFiles):
+    f1, f2 = get_file_id(conn, workingFiles)
+    cur = conn.cursor()
+    for quad in b:
+        cur.execute("INSERT INTO quadrangle\
+            (referencemag, secondarymag, diskangle, area,\
+            referencefluxdensity, secondaryfluxdensity, fragmentationvalue)\
+            VALUES\
+            (%s, %s, %s, %s, %s, %s, %s)",
+            (f1, f2, np.float32(quad.diskAngle.v), quad.area.v,
+            quad.fluxDensity.v, quad.fluxDensity2, quad.fragmentationValue))
+
+    cur.execute("INSERT INTO uniquepairs\
+            VALUES (%s, %s, %s)", (f1, f2, quad.fragmentationValue))
+
+    conn.commit()
+    cur.close()
+
+
+def compare_day(i1, i2, par, filePair):
     """
     Fully autonomous magnetogram comparison function.
 
@@ -246,12 +245,14 @@ def compare_day(i1, i2, par, f1=None, f2=None):
     If date is entered, it will compare magnetograms for that date.
     f1 and f2 are filenames that bypass all of this
     """
-    if f1 is not None or f2 is not None:
-        files = (f1, f2)
+    if filePair is not None:
+        files = filePair
     else:
         files = random.choice(process_instruments(i1, i2, par))
 
     m1, m2 = fix_longitude(files[0], files[1])
+    if np.isnan(m1.im_raw.data).all() or np.isnan(m2.im_raw.data).all():
+        raise ValueError
     blocks_n = quad.fragment_multiple(m1, m2, par['n'])
 
     return blocks_n
@@ -261,23 +262,15 @@ def get_instruments():
     i1 = input("Enter an instrument: ")
     i2 = input("Enter a second instrument: ")
 
-def select_pair(par):
-    """Guides user through valid date combinations and returns filepaths."""
-    files, dates = process_instruments(i1, i2, par, True)
-    print(set([x.year for x in dates]))
-    y = input("Choose a year: ")
-    print(set([x.month for x in dates if x.year == int(y)]))
-    m = input("Choose a month: ")
-    print(set([x.day for x in dates if x.year == int(y) and x.month == int(m)]))
-    d = input("Choose a day: ")
-    t = [x for x in dates if x.year == int(y) and x.month == int(m) and x.day == int(d)][0]
-    files = process_date(i1, i2, t, 1)
-    k = 0
-    for line in files:
-        print("{}: ({}, {})".format(k, line[0].split('\\')[-1], line[1].split('\\')[-1]))
-        k += 1
-    choice = int(input("Select a pair: "))
-    return files[choice]
+def get_file_id(conn, files):
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM file WHERE filepath = %s", (files[0],))
+    fileID1 = cur.fetchone()[0]
+    cur.execute("SELECT id FROM file WHERE filepath = %s", (files[1],))
+    fileID2 = cur.fetchone()[0]
+    cur.close()
+
+    return fileID1, fileID2
 
 def main():
     """
@@ -297,8 +290,7 @@ def main():
     parse_args()
     if i1 is None or i2 is None:
         get_instruments()
-
-    bl = []
+    conn = z.load_database()
 
     while True:
         try:
@@ -311,26 +303,35 @@ def main():
                 except ValueError:
                     passes = 1
                 n = int(input("Enter segmentation level: "))
-                tol1 = dt.timedelta(seconds=timeparse(input("Enter minimum time: ")))
-                tol2 = dt.timedelta(seconds=timeparse(input("Enter maximum time: ")))
+                tol1 = input("Enter minimum time: ")
+                tol2 = input("Enter maximum time: ")
                 params = {'n': n, 't1': tol1, 't2': tol2}
+                fileMatches = process_instruments(i1, i2, params)
                 for i in range(passes):
-                    b = compare_day(i1, i2, params)
-                    bl.append(b)
-            elif 's' in option:
-                tol1 = dt.timedelta(seconds=timeparse(input("Enter minimum time: ")))
-                tol2 = dt.timedelta(seconds=timeparse(input("Enter maximum time: ")))
-                n = int(input("Enter segmentation level: "))
-                params = {'n': n, 't1': tol1, 't2': tol2}
-                file1, file2 = select_pair(params)
-                b = compare_day(i1, i2, params, f1=file1, f2=file2)
-                bl.append(b)
+                    try:
+                        choiceInt = int(random.random()*len(fileMatches))
+                        workingFiles = fileMatches[choiceInt]
+                        fileIDs = get_file_id(conn, workingFiles)
+                        cur = conn.cursor()
+                        cur.execute("SELECT * FROM uniquepairs\
+                                WHERE referencemag = %s \
+                                AND secondarymag = %s\
+                                AND fragmentationvalue = %s", (fileIDs[0], fileIDs[1], n))
+                        if cur.fetchone() is not None:
+                            cur.close()
+                            continue
+                        cur.close()
+                        b = compare_day(i1, i2, params, workingFiles)
+                        del fileMatches[choiceInt] #So we don't hit it again
+                    except ValueError:
+                        continue
+                    upload_quadrangles(conn, b, workingFiles)
             elif 'e' in option:
                 break
         except Exception as e:
             print(e)
             continue
-    return bl
+    return
 
 if __name__ == "__main__":
     main()
