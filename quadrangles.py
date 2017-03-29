@@ -48,8 +48,8 @@ class Quadrangle:
         return M.arcsin(meanAngularRadius/m.rsun)*180/np.pi
 
     def mean_flux_density(self, arr, ind):
-        """Returns the average uncorrected magnetic flux density."""
-        return M.nanmean(arr[ind])
+        """Returns the average corrected magnetic flux density."""
+        return M.mean(arr[ind])
 
     def sum_area(self, m, ind):
         """Returns the total area covered by the quadrangle."""
@@ -216,10 +216,10 @@ def extract_valid_points(bl):
     flxD2 = bl['secondaryFD']
     da = bl['diskangle']
 
-    ind = np.where(np.logical_and( np.logical_or(np.abs(flxD1/flxD2) > 10, np.abs(flxD2/flxD1) > 10), (np.maximum(np.abs(flxD1),np.abs(flxD2)) > 15)))
-    flxD1[ind] = np.nan
-    flxD2[ind] = np.nan
-    da[ind] = np.nan
+    # ind = np.where(np.logical_and( np.logical_or(np.abs(flxD1/flxD2) > 10, np.abs(flxD2/flxD1) > 10), (np.maximum(np.abs(flxD1),np.abs(flxD2)) > 15)))
+    # flxD1[ind] = np.nan
+    # flxD2[ind] = np.nan
+    # da[ind] = np.nan
 
     return flxD1, flxD2, da
 

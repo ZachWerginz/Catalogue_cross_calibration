@@ -13,7 +13,6 @@ from uncertainty import Measurement as M
 import random
 import getopt
 import sys
-from timeparse import timeparse
 from scipy.interpolate import griddata
 import psycopg2 as psy
 
@@ -164,6 +163,8 @@ def fix_longitude(f1, f2):
     considering they will only be off by some constant.
     """
 
+    print(f1)
+    print(f2)
     mgnt1 = CRD(f1)
     mgnt2 = CRD(f2)
     print(mgnt1.im_raw.date)
@@ -173,37 +174,36 @@ def fix_longitude(f1, f2):
     mgnt1.magnetic_flux()
     mgnt2.magnetic_flux()
     #Apply differential Rotation
-    rotation = z.diff_rot(mgnt1, mgnt2)
-    mgnt2.lonhOld = mgnt2.lonh
-    mgnt2.lonh = rotation.value + mgnt2.lonh
     if mgnt2.im_raw.dimensions[0].value > mgnt1.im_raw.dimensions[0].value:
+        rotation = z.diff_rot(mgnt2, mgnt1)
+        mgnt1.lonhRot = mgnt1.lonh + rotation.value
         interpolate_remap(mgnt2, mgnt1)
         return mgnt2, mgnt1
     else:
+        rotation = z.diff_rot(mgnt1, mgnt2)
+        mgnt2.lonhRot = mgnt2.lonh + rotation.value
         interpolate_remap(mgnt1, mgnt2)
         return mgnt1, mgnt2
     
 def interpolate_remap(m1, m2):
-
-    x2 = m2.lath.v.flatten()
-    y2 = m2.lonh.v.flatten()
+    x2 = m2.lonhRot.v.flatten()
+    y2 = m2.lath.v.flatten()
     v2 = m2.im_corr.v.flatten()
-    x1 = m1.lath.v.flatten()
-    y1 = m1.lonh.v.flatten()
+    x1 = m1.lonh.v.flatten()
+    y1 = m1.lath.v.flatten()
     dim1 = m1.im_raw.dimensions
 
-    latitudeMask = np.where(np.abs(x2) < 50)
-    minimum = max(np.nanmin(y2[latitudeMask]),np.nanmin(y1[latitudeMask]))
-    maximum = min(np.nanmax(y2[latitudeMask]), np.nanmax(y1[latitudeMask]))
+    latitudeMask = np.where(np.abs(y2) < 50)
+    minimum = max(np.nanmin(x2[latitudeMask]),np.nanmin(x1[latitudeMask]))
+    maximum = min(np.nanmax(x2[latitudeMask]), np.nanmax(x1[latitudeMask]))
 
-    ind2 = np.where(np.logical_and(np.logical_and(np.isfinite(y2), np.isfinite(v2)) ,np.logical_and(y2 > minimum, y2 < maximum)))
-    ind1 = np.where(np.logical_and(np.isfinite(y1), np.logical_and(y1 > minimum, y1 < maximum)))
+    ind2 = (np.isfinite(x2) * np.isfinite(y2) * np.isfinite(v2) * (x2 > minimum) * (x2 < maximum))
+    ind1 = (np.isfinite(x1) * np.isfinite(y1) * (x1 > minimum) * (x1 < maximum))
 
     interp_data = griddata((x2[ind2], y2[ind2]), v2[ind2], (x1[ind1], y1[ind1]), method='cubic')
     new_m2 = np.full((int(dim1[0].value), int(dim1[1].value)), np.nan)
 
     new_m2.ravel()[ind1] = interp_data
-    #new_m2.ravel()[(m1.rg.v.flatten() > m1.rsun*np.sin(75.0*np.pi/180))] = np.nan
 
     m2.remap = new_m2
 
@@ -221,21 +221,28 @@ def run_multiple_n(m):
 def upload_quadrangles(conn, b, workingFiles):
     f1, f2 = get_file_id(conn, workingFiles)
     cur = conn.cursor()
-    for quad in b:
-        cur.execute("INSERT INTO quadrangle\
-            (referencemag, secondarymag, diskangle, area,\
-            referencefluxdensity, secondaryfluxdensity, fragmentationvalue)\
-            VALUES\
-            (%s, %s, %s, %s, %s, %s, %s)",
-            (f1, f2, np.float32(quad.diskAngle.v), quad.area.v,
-            quad.fluxDensity.v, quad.fluxDensity2, quad.fragmentationValue))
+    try:
+        for quad in b:
+            if np.isnan(quad.fluxDensity.v) or np.isnan(quad.fluxDensity2):
+                continue
+            cur.execute("INSERT INTO quadrangle\
+                (referencemag, secondarymag, diskangle, area,\
+                referencefluxdensity, secondaryfluxdensity, fragmentationvalue)\
+                VALUES\
+                (%s, %s, %s, %s, %s, %s, %s)",
+                (f1, f2, np.float32(quad.diskAngle.v), quad.area.v,
+                quad.fluxDensity.v, quad.fluxDensity2, quad.fragmentationValue))
 
-    cur.execute("INSERT INTO uniquepairs\
-            VALUES (%s, %s, %s)", (f1, f2, quad.fragmentationValue))
-
+        cur.execute("INSERT INTO uniquepairs\
+                VALUES (%s, %s, %s)", (f1, f2, quad.fragmentationValue))
+    except:
+        print("Could not upload completely to database.")
+        conn.rollback()
+        cur.close()
+        return
+       
     conn.commit()
     cur.close()
-
 
 def compare_day(i1, i2, par, filePair):
     """
@@ -249,10 +256,10 @@ def compare_day(i1, i2, par, filePair):
         files = filePair
     else:
         files = random.choice(process_instruments(i1, i2, par))
-
-    m1, m2 = fix_longitude(files[0], files[1])
-    if np.isnan(m1.im_raw.data).all() or np.isnan(m2.im_raw.data).all():
-        raise ValueError
+    try:
+        m1, m2 = fix_longitude(files[0], files[1])
+    except ValueError:
+        raise
     blocks_n = quad.fragment_multiple(m1, m2, par['n'])
 
     return blocks_n
@@ -293,45 +300,56 @@ def main():
     conn = z.load_database()
 
     while True:
-        try:
-            option = input("Choose a function: (r)andom [num], (s)elect date, switch (i)nstruments, (e)xit: ")
-            if option=='i':
-                get_instruments()
-            elif 'r' in option:
+        option = input("Choose a function: (r)andom [num], (s)elect date, switch (i)nstruments, (e)xit: ")
+        if option=='i':
+            get_instruments()
+        elif 'r' in option:
+            try:
+                passes = int(option.split()[-1])
+            except ValueError:
+                passes = 1
+            n = int(input("Enter segmentation level: "))
+            tol1 = input("Enter minimum time: ")
+            tol2 = input("Enter maximum time: ")
+            params = {'n': n, 't1': tol1, 't2': tol2}
+            fileMatches = process_instruments(i1, i2, params)
+            for i in range(min(len(fileMatches),passes)):
                 try:
-                    passes = int(option.split()[-1])
-                except ValueError:
-                    passes = 1
-                n = int(input("Enter segmentation level: "))
-                tol1 = input("Enter minimum time: ")
-                tol2 = input("Enter maximum time: ")
-                params = {'n': n, 't1': tol1, 't2': tol2}
-                fileMatches = process_instruments(i1, i2, params)
-                for i in range(passes):
-                    try:
-                        choiceInt = int(random.random()*len(fileMatches))
-                        workingFiles = fileMatches[choiceInt]
-                        fileIDs = get_file_id(conn, workingFiles)
-                        cur = conn.cursor()
-                        cur.execute("SELECT * FROM uniquepairs\
-                                WHERE referencemag = %s \
-                                AND secondarymag = %s\
-                                AND fragmentationvalue = %s", (fileIDs[0], fileIDs[1], n))
-                        if cur.fetchone() is not None:
-                            cur.close()
-                            continue
+                    choiceInt = int(random.random()*len(fileMatches))
+                    workingFiles = fileMatches[choiceInt]
+                    fileIDs = get_file_id(conn, workingFiles)
+                    cur = conn.cursor()
+                    cur.execute("SELECT * FROM uniquepairs\
+                            WHERE referencemag = %s \
+                            AND secondarymag = %s\
+                            AND fragmentationvalue = %s", (fileIDs[0], fileIDs[1], n))
+                    if cur.fetchone() is not None:
                         cur.close()
-                        b = compare_day(i1, i2, params, workingFiles)
-                        del fileMatches[choiceInt] #So we don't hit it again
-                    except ValueError:
                         continue
-                    upload_quadrangles(conn, b, workingFiles)
-            elif 'e' in option:
-                break
-        except Exception as e:
-            print(e)
-            continue
+                    cur.close()
+                    b = compare_day(i1, i2, params, workingFiles)
+                    del fileMatches[choiceInt] #So we don't hit it again
+                except ValueError:
+                    continue
+                upload_quadrangles(conn, b, workingFiles)
+        elif 'e' in option:
+            break
     return
 
 if __name__ == "__main__":
     main()
+
+
+def convert_bl(bl):
+    y = np.array([s.fluxDensity.v for s in bl])
+    x = np.array([s.fluxDensity2 for s in bl])
+    da = np.array([s.diskAngle.v for s in bl])
+    b = {}
+    b['referenceFD'] = y
+    b['secondaryFD'] = x
+    b['n'] = 25
+    b['timeDifference'] = dt.timedelta(minutes=96)
+    b['i1'] = 'mdi'
+    b['i2'] = 'mdi'
+    b['diskangle'] = da
+    return b

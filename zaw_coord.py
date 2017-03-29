@@ -32,6 +32,7 @@ class CRD:
     def __init__(self, filename):
         """Reads magnetogram as a sunpy.map object."""
         self.fn = filename
+        self.crdfn = False
         try:
             CRDfilename = filename.replace('.fits', '.CRD.fits')
             paths = os.path.splitdrive(CRDfilename)
@@ -47,7 +48,6 @@ class CRD:
             mfits.close()
         except IOError:
             self.im_raw = sunpy.map.Map(filename)
-            self.crdfn = False
 
         if self.im_raw.detector == '512':
 

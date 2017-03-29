@@ -14,7 +14,7 @@ psy.extensions.register_adapter(np.float32, psy._psycopg.AsIs)
 DEC2FLOAT = psy.extensions.new_type(
     psy.extensions.DECIMAL.values,
     'DEC2FLOAT',
-    lambda value, curs: float(value) if value is not None else None)
+    lambda value, curs: np.float32(value) if value is not None else None)
 psy.extensions.register_type(DEC2FLOAT)
 
 __authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
@@ -40,15 +40,40 @@ def load_database():
         conn = psy.connect("dbname='cross_calibration' user='zwerginz' host='minerva' password='8raSp6tr'")
     except:
         print ("I am unable to connect to the database")
+        return
     return conn
 
+def load_local_cc_data():
+    """Loads the pickle files in the same directory to lists."""
+    fileNames = {'ff24': '512_512_24.pkl',
+                'ff48': '512_512_48.pkl',
+                'fs48': '512_SPMG_48.pkl',
+                'ss24': 'SPMG_SPMG_24.pkl',
+                'sm1': 'SPMG_MDI_1.pkl',
+                'sm24': 'SPMG_MDI_24.pkl',
+                'mm1':  'MDI_MDI_1.pkl',
+                'mm24': 'MDI_MDI_24.pkl',
+                'mm48': 'MDI_MDI_48.pkl',
+                'mh1':  'MDI_HMI_1.pkl',
+                'hh24': 'HMI_HMI_24.pkl'}
+    instrumentPairs = {}
+    for pair, name in fileNames.items():
+        with open(name, 'rb') as f:
+            instrumentPairs[pair] = pickle.load(f)
+
+    return instrumentPairs
 def download_cc_data(i1, i2, n, tol1, tol2):
     conn = load_database()
-    cur = conn.cursor()
+    cur = conn.cursor("server_side")
+    fetchlimit = 10000000
 
     instrumentKey = {'512': 1, 'SPMG': 2, 'MDI': 3, 'HMI': 4}
     
     result = {}
+    points = [0]
+    x = []
+    y = []
+    da = []
     cur.execute("SELECT referencefluxdensity, secondaryfluxdensity, diskangle \
             FROM quadrangle q JOIN file a ON q.referencemag = a.id \
             JOIN file b ON q.secondarymag = b.id \
@@ -57,18 +82,26 @@ def download_cc_data(i1, i2, n, tol1, tol2):
             AND age(b.date, a.date) BETWEEN  INTERVAL %s AND  INTERVAL %s",
             (n, instrumentKey[i1.upper()], instrumentKey[i2.upper()], tol1, tol2))
 
-    points = cur.fetchall()
+    while points:
+        points = cur.fetchmany(fetchlimit)
+        x.extend([s[0] for s in points])
+        y.extend([s[1] for s in points])
+        da.extend([np.float32(s[2]) for s in points])
+    cur.close()
 
-    y, x, da = zip(*points)
 
-    result['referenceFD'] = np.array(y)
-    result['secondaryFD'] = np.array(x)
+    result['referenceFD'] = np.array(x)
+    result['secondaryFD'] = np.array(y)
     result['diskangle'] = np.array(da)
     result['i1'] = i1
     result['i2'] = i2
+    result['n'] = n
 
-    cur.execute("SELECT INTERVAL %s - INTERVAL %s", (tol1, tol2))
-    result['timeDifference'] = cur.fetchone()[0]
+    cur = conn.cursor()
+    cur.execute("SELECT (INTERVAL %s)*SIGN(EXTRACT(epoch from INTERVAL %s)) + \
+            (INTERVAL %s)*SIGN(EXTRACT(epoch from INTERVAL %s))", 
+            (tol2, tol2, tol1, tol1))
+    result['timeDifference'] = cur.fetchone()[0]/2 - dt.timedelta(0)
     cur.close()
 
     return result

@@ -206,6 +206,23 @@ class Measurement:
                 return np.nan
             return np.nanmean(array)
 
+    def mean(array):
+        try:
+            i = 0
+            unc = 0
+            if np.isnan(array.v).all() or len(array.v) == 0:
+                return Measurement(np.nan, np.nan)
+            val = np.mean(array.v)
+            for u in np.nditer(array.u):
+                if np.isfinite(u):
+                    unc += u**2
+                    i +=1
+            return Measurement(val, np.sqrt(unc)/i)
+        except AttributeError:
+            if np.isnan(array).all() or len(array) == 0:
+                return np.nan
+            return np.mean(array)
+
 
     def isfinite(array):
         try:
