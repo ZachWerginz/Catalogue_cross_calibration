@@ -52,9 +52,13 @@ def load_local_cc_data():
                 'sm1': 'SPMG_MDI_1.pkl',
                 'sm24': 'SPMG_MDI_24.pkl',
                 'mm1':  'MDI_MDI_1.pkl',
+                'mm3': 'MDI_MDI_3.pkl',
+                'mm12': 'MDI_MDI_12.pkl',
                 'mm24': 'MDI_MDI_24.pkl',
+                'mm36': 'MDI_MDI_36.pkl',
                 'mm48': 'MDI_MDI_48.pkl',
                 'mh1':  'MDI_HMI_1.pkl',
+                'hh0': 'HMI_HMI_0.pkl',
                 'hh24': 'HMI_HMI_24.pkl'}
     instrumentPairs = {}
     for pair, name in fileNames.items():
