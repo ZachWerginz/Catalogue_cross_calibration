@@ -223,7 +223,7 @@ def upload_quadrangles(conn, b, workingFiles):
     cur = conn.cursor()
     try:
         for quad in b:
-            if np.isnan(quad.fluxDensity.v) or np.isnan(quad.fluxDensity2):
+            if np.isnan(quad.fluxDensity) or np.isnan(quad.fluxDensity2):
                 continue
             cur.execute("INSERT INTO quadrangle\
                 (referencemag, secondarymag, diskangle, area,\
@@ -231,7 +231,7 @@ def upload_quadrangles(conn, b, workingFiles):
                 VALUES\
                 (%s, %s, %s, %s, %s, %s, %s)",
                 (f1, f2, np.float32(quad.diskAngle.v), quad.area.v,
-                quad.fluxDensity.v, quad.fluxDensity2, quad.fragmentationValue))
+                quad.fluxDensity, quad.fluxDensity2, quad.fragmentationValue))
 
         cur.execute("INSERT INTO uniquepairs\
                 VALUES (%s, %s, %s)", (f1, f2, quad.fragmentationValue))
@@ -332,24 +332,46 @@ def main():
                 except ValueError:
                     continue
                 upload_quadrangles(conn, b, workingFiles)
+        elif 'rs' in option:
+            """Special option for only selecting unique days, not pairs"""
+            try:
+                passes = int(option.split()[-1])
+            except ValueError:
+                passes = 1
+            n = int(input("Enter segmentation level: "))
+            tol1 = input("Enter minimum time: ")
+            tol2 = input("Enter maximum time: ")
+            params = {'n': n, 't1': tol1, 't2': tol2}
+            fileMatches = process_instruments(i1, i2, params)
+            dayMatches = []
+            i = 0
+            while i < passes:
+                try:
+                    choiceInt = int(random.random()*len(fileMatches))
+                    workingFiles = fileMatches[choiceInt]
+                    fileIDs = get_file_id(conn, workingFiles)
+                    cur = conn.cursor()
+                    cur.execute("SELECT * FROM uniquepairs\
+                            WHERE referencemag = %s \
+                            AND secondarymag = %s\
+                            AND fragmentationvalue = %s", (fileIDs[0], fileIDs[1], n))
+                    if cur.fetchone() is not None:
+                        cur.close()
+                        continue
+                    cur.execute("SELECT date FROM file WHERE id = %s OR id = %s", (fileIDs[0], fileIDs[1]))
+                    if (cur.fetchone()[0].toordinal(), cur.fetchone()[0].toordinal()) in dayMatches:
+                        continue
+                    dayMatches.append((cur.fetchone()[0].toordinal(), cur.fetchone()[0].toordinal()))
+                    cur.close()
+                    b = compare_day(i1, i2, params, workingFiles)
+                    del fileMatches[choiceInt] #So we don't hit it again
+                except ValueError:
+                    continue
+                upload_quadrangles(conn, b, workingFiles)
+                i += 1
         elif 'e' in option:
             break
     return
 
 if __name__ == "__main__":
     main()
-
-
-def convert_bl(bl):
-    y = np.array([s.fluxDensity.v for s in bl])
-    x = np.array([s.fluxDensity2 for s in bl])
-    da = np.array([s.diskAngle.v for s in bl])
-    b = {}
-    b['referenceFD'] = y
-    b['secondaryFD'] = x
-    b['n'] = 25
-    b['timeDifference'] = dt.timedelta(minutes=96)
-    b['i1'] = 'mdi'
-    b['i2'] = 'mdi'
-    b['diskangle'] = da
-    return b
