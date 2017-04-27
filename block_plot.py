@@ -15,6 +15,7 @@ from scipy.odr import *
 from itertools import cycle, islice
 from mpl_toolkits.axes_grid1 import AxesGrid
 import random
+import ransac
 import quadrangles as quad
 
 __authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
@@ -39,10 +40,10 @@ def power_law(x, a, b, c):
     return (a*(x**b)) + c
 
 def power_func(p, x, y):
-    return (p[0]*(x**p[1])) - y
+    return (p[0]*(x**p[1])) + 5 - y
 
 def power_func_intercept(p, x, y):
-    return (p[0]*(x**p[1])) - p[2] - y
+    return (p[0]*(x**p[1])) + p[2] - y
 
 def linear_law(x, a, b):
     return a*x + b
@@ -57,6 +58,7 @@ def gaussian_func(p, x, y):
     return p[0]/(np.sqrt(2*np.pi)*p[1])*np.exp(-(x-p[2])**2/(2.*p[1]**2)) - y
 
 def fit_medians(h, fitType='power', corrected=False):
+    """Deprecated"""
     if corrected:
         medy = [s['correctedMed'] for s in h]
     else:
@@ -78,28 +80,44 @@ def fit_medians(h, fitType='power', corrected=False):
     elif fitType=='linear':
         return {'a': popt.x[0], 'aUnc': stderr[0], 'sse': np.sum(popt.fun**2), 'n': len(medx), 'sst': np.sum((medy-np.mean(medy))**2)}
 
-def fit_corrected_means(x, y):
-    ind = (np.isfinite(x) & np.isfinite(y))
-    popt, pcov = curve_fit(power_law, np.abs(x)[ind], np.abs(y)[ind])
-    return {'a': popt[0], 'b': popt[1]}
-
 def fit_xy(x, y, fitType='power'):
+    ind = (np.isfinite(x) & np.isfinite(y))
     if fitType=='power':
-        popt = scipy.optimize.least_squares(power_func, [1, .5], args=(x, y), jac='3-point', loss='soft_l1', f_scale=10)
+        popt = scipy.optimize.least_squares(power_func, [1, .5],
+                        args=(x[ind], y[ind]), bounds=([0,0], [np.inf, np.inf]),
+                        ftol=1e-8, xtol=1e-8, gtol=1e-8, x_scale='jac',
+                        jac='3-point', loss='soft_l1', f_scale=.5)
     elif fitType=='powerC':
-        popt = scipy.optimize.least_squares(power_func_intercept, [1, .5, 5], args=(x, y), loss='soft_l1', f_scale=10)
+        popt = scipy.optimize.least_squares(power_func_intercept, [1, .5, 1], 
+                        args=(x[ind], y[ind]), max_nfev=10000,
+                        bounds=([0,0,0], [np.inf, np.inf,np.inf]), 
+                        ftol=1e-3, xtol=1e-3, gtol=1e-3, x_scale='jac', 
+                        jac='3-point', loss='soft_l1', f_scale=.5)
+    elif fitType=='linear':
+        popt = scipy.optimize.least_squares(linear_func, [1],
+                        args=(x[ind], y[ind]), loss='huber', f_scale=.1)
+    #---------------Acquire fit uncertainties-----------------------------------
     _, s, VT = np.linalg.svd(popt.jac, full_matrices=False)
     threshold = np.finfo(float).eps * max(popt.jac.shape) * s[0]
     s = s[s > threshold]
     VT = VT[:s.size]
     pcov = np.dot(VT.T / s**2, VT)
     stderr = np.sqrt(np.diag(pcov))
-    if fitType=='power':
-        return {'a': popt.x[0], 'aUnc': stderr[0], 'b': popt.x[1], 'bUnc': stderr[1]}
-    elif fitType=='powerC':
-        return {'a': popt.x[0], 'aUnc': stderr[0], 'b': popt.x[1], 'bUnc': stderr[1], 'c': popt.x[2], 'cUnc': stderr[2]}
 
-def plot_fits(a, b, c=0, fitType='power', ax=None, **kwargs):
+    #--------------Return appropriate parameters--------------------------------
+    if fitType=='power':
+        return {'a': popt.x[0], 'aUnc': stderr[0], 
+                'b': popt.x[1], 'bUnc': stderr[1],
+                'n': len(x), 'res': np.sum(popt.fun/y[ind])}
+    elif fitType=='powerC':
+        return {'a': popt.x[0], 'aUnc': stderr[0], 
+                'b': popt.x[1], 'bUnc': stderr[1], 
+                'c': popt.x[2], 'cUnc': stderr[2],
+                'n': len(x), 'res': np.sum(popt.fun/y[ind])}
+    elif fitType=='linear':
+        return {'a': popt.x[0], 'aUnc': stderr[0], 'n': len(x), 'res': np.sum(popt.fun/y[ind])}
+
+def plot_fits(a, b, c=5, fitType='power', ax=None, **kwargs):
     def callback(axes):
         low_x, high_x = axes.get_xlim()
         low_y, high_y = axes.get_ylim()
@@ -199,7 +217,9 @@ def box_plot(bl, dL, ax, clr='blue', **kwargs):
         indValid = ((D < D[maxInd]))
         try:
             popt, pcov = curve_fit(gaussian, xspace[indValid], 
-                D[indValid], p0=[1000, 50, bin['sliceMed']], maxfev=10000)
+                D[indValid], 
+                p0=[np.abs(bin['sliceMed']), np.abs(bin['sliceMed']/5), bin['sliceMed']], 
+                maxfev=10000)
         except:
             popt = np.array([np.nan, np.nan, np.nan])
         gaussianMeans.append(popt[2])
@@ -220,8 +240,8 @@ def box_plot(bl, dL, ax, clr='blue', **kwargs):
     ax.set(aspect='equal')
     add_identity(ax, color='.3', ls='--', zorder=1)
 
-    for std, mean, x in zip(gaussianStds, gaussianMeans, xPos):
-        ax.plot([x, x], [mean+std, mean-std], 'k-', alpha=.6)
+    for std, mean, xPos in zip(gaussianStds, gaussianMeans, x):
+        ax.plot([xPos, xPos], [mean+std, mean-std], 'k-', alpha=.6)
 
     for bx in box['boxes']:
         bx.set(edgecolor=clr, facecolor=clr, alpha=.75)
@@ -249,7 +269,6 @@ def box_grid(bl, diskCuts=[0, 30, 45, 70], **kwargs):
 
     for plot in grid:
         plot.set_xlim(grid[0].get_ylim())
-        #plot.set_aspect('equal')
 
     grid[1].xaxis.set_ticks_position('top')
     grid[0].set_ylabel(i1 + ' Field (G)', labelpad=-.75)
@@ -267,14 +286,17 @@ def box_grid(bl, diskCuts=[0, 30, 45, 70], **kwargs):
     fitParameters = []
 
     for h in diskCutData:
-        fitParameters.append(fit_medians(h))
+        fitParameters.append(fit_xy(
+            np.abs(np.array([s['sliceMed'] for s in h])), 
+            np.abs(np.array([s['med'] for s in h])),
+            'power'))
 
     for g in grid:
         for p in fitParameters:
             plot_fits(p['a'], p['b'], ax=g, color=next(colorcycler),
                 linewidth=3, linestyle=next(linecycler), zorder=1)
 
-    add_box_legend(grid, diskCuts, fitParameters)
+    add_box_legend(grid, diskCuts)
     #f.savefig('pict.png', bbox_inches='tight', pad_inches = 0.1)
 
 def corrected_box_plot(bl, dL, ax, clr='blue', **kwargs):
@@ -292,10 +314,16 @@ def corrected_box_plot(bl, dL, ax, clr='blue', **kwargs):
         D = binKernelArray/np.sqrt(totalKernelArray)
         indValid = ((D < 1e7))
         try:
-            popt = scipy.optimize.least_squares(gaussian_func, [np.abs(bin['sliceMed']), np.abs(bin['sliceMed']/5), bin['sliceMed']], args=(xspace[indValid], D[indValid]), loss='arctan', f_scale=.1).x
+            popt = scipy.optimize.least_squares(gaussian_func, 
+                    [np.abs(bin['sliceMed']), np.abs(bin['sliceMed']/5), bin['sliceMed']], 
+                    args=(xspace[indValid], D[indValid]), 
+                    loss='arctan', f_scale=.1).x
         except ValueError:
             try:
-                popt = scipy.optimize.least_squares(gaussian_func, [np.abs(bin['sliceMed']), np.abs(bin['sliceMed']/5), bin['sliceMed']], args=(xspace[indValid], D[indValid]), loss='soft_l1', f_scale=.1).x
+                popt = scipy.optimize.least_squares(gaussian_func, 
+                    [np.abs(bin['sliceMed']), np.abs(bin['sliceMed']/5), bin['sliceMed']], 
+                    args=(xspace[indValid], D[indValid]),
+                    loss='soft_l1', f_scale=.1).x
             except ValueError:
                 popt = np.array([np.nan, np.nan, np.nan])
         bin['correctedMed'] = popt[2]
@@ -334,7 +362,11 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, **kwar
     diskCutData = []
     f, grid = plt.subplots(1, len(diskCuts) - 1, sharey=True, figsize=(24, 13))
     f.subplots_adjust(left=.05, right=.94, bottom=.20, top=.75, wspace=0)
-    colors = [(80/255, 60/255, 0), (81/255, 178/255, 76/255), (114/255, 178/255, 229/255)]
+    colors =   [(80/255, 60/255, 0), 
+                (81/255, 178/255, 76/255),
+                (114/255, 178/255, 229/255),
+                (111/255, 40/255, 124/255),
+                (255/255, 208/255, 171/255)]
     #-----------------------------Extract box data------------------------------
     if fullSectorData is None:
         for i in range(len(diskCuts)-1):
@@ -343,22 +375,24 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, **kwar
     else:
         diskCutData = fullSectorData
     #--------------------------Setting plot parameters--------------------------
-    nLims = {'400': 2500, '200': 1500, '100': 750, '50': 400, '25': 75}
+    nLims = {'400': 2500, '399': 2250, '300': 2000, '200': 1500, '150': 1000, '100': 750, '75': 500, '50': 400, '25': 75}
     lim = nLims[str(bl['n'])]
     grid[0].set_ylim(-lim, lim)
 
-    for plot in grid:
+    for i, plot in enumerate(grid):
         plot.set_xlim(grid[0].get_ylim())
+        if i % 2 == 1: #even number
+            plot.xaxis.set_ticks_position('top')
 
-    grid[1].xaxis.set_ticks_position('top')
+    #grid[1].xaxis.set_ticks_position('top')
     grid[0].set_ylabel(
         r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
         labelpad=-.75)
-    grid[2].set_ylabel(
+    grid[-1].set_ylabel(
         r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
         labelpad=25, rotation=270)
-    grid[2].yaxis.set_ticks_position('right')
-    grid[2].yaxis.set_label_position('right')
+    grid[-1].yaxis.set_ticks_position('right')
+    grid[-1].yaxis.set_label_position('right')
     f.text(.40, .17, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i2.upper()))
     fig_title = "Time Difference Between Magnetograms: " + tDiff + \
         '\n' + 'n = ' + str(bl['n'])
@@ -370,9 +404,11 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, **kwar
     fitParametersPower = []
     fitParametersLinear = []
 
-    for s in diskCutData:
-        fitParametersPower.append(fit_medians(s, 'power', True))
-        fitParametersLinear.append(fit_medians(s, 'linear', True))
+    for sec in diskCutData:
+        x = np.abs(np.array([s['sliceMed'] for s in sec]))
+        y= np.abs(np.array([s['correctedMed'] for s in sec]))
+        fitParametersPower.append(fit_xy(x, y, 'power'))
+        fitParametersLinear.append(fit_xy(x, y, 'linear'))
 
     for i, g in enumerate(grid):
         c = next(colorcycler)
@@ -399,8 +435,8 @@ def variance_grid(bl, fullSectorData=None, diskCuts=[0, 20, 45, 90], **kwargs):
     f, grid = plt.subplots(1, len(diskCuts) - 1, sharey=True, figsize=(24, 13))
     f.subplots_adjust(left=.05, right=.94, bottom=.20, top=.75, wspace=0)
     colors = [(80/255, 60/255, 0), (81/255, 178/255, 76/255), (114/255, 178/255, 229/255)]
-    nxLims = {'400': 2500, '200': 1500, '100': 750, '50': 400, '25': 75}
-    nyLims = {'400': 900, '200': 500, '100': 275, '50': 75, '25': 25}
+    nxLims = {'400': 2500, '300': 2000, '200': 1500, '100': 750, '75': 600, '50': 400, '25': 75}
+    nyLims = {'400': 900, '300': 500, '200': 500, '100': 275, '75': 150, '50': 75, '25': 25}
     fitParametersC = []
     fitParameters = []
     colorcycler = cycle(colors)
@@ -413,10 +449,10 @@ def variance_grid(bl, fullSectorData=None, diskCuts=[0, 20, 45, 90], **kwargs):
                 color=colors[i], **kwargs)
         g.set_xlim(0, nxLims[str(bl['n'])])
         g.set_ylim(0, nyLims[str(bl['n'])])
-        p = fit_xy(np.abs(medians), np.abs(stdevs), fitType='power')
+        p = fit_xy(np.abs(medians), np.abs(stdevs), fitType='powerC')
         fitParameters.append(p)
         c = next(colorcycler)
-        plot_fits(p['a'], p['b'], fitType='power', ax=g, color=c,
+        plot_fits(p['a'], p['b'], p['c'], fitType='powerC', ax=g, color=c,
                  linewidth=3, linestyle='--', zorder=1)
 
     #--------------------------Setting plot parameters--------------------------
@@ -434,7 +470,7 @@ def variance_grid(bl, fullSectorData=None, diskCuts=[0, 20, 45, 90], **kwargs):
         '\n' + 'n = ' + str(bl['n'])
     f.suptitle(fig_title, y=.85, fontsize=30, fontweight='bold')
 
-    add_equations(grid, fitParameters, 'power', 'bot')
+    add_equations(grid, fitParameters, 'powerC', 'bot')
     add_box_legend(grid, diskCuts)
     return fitParameters
 
@@ -450,45 +486,114 @@ def extract_fitting_data(iP):
     outerB = []
     middleB = []
     centerB = []
+    outerC = []
+    middleC = []
+    centerC = []
 
     iKey = {'f': '512', 's': 'spmg', 'm': 'mdi', 'h': 'hmi'}
     for key, pairData in iP.items():
-        for nValue in [25, 50, 100, 200, 400]:
-            fitParameters = variance_grid(pairData['{0}_data'.format(nValue)], 
-                                        pairData['{0}_boxes'.format(nValue)])
-            plt.clf()
-            n.append(nValue)
-            i1.append(iKey[key[0]])
-            i2.append(iKey[key[1]])
-            t.append(int(key[2:len(key)]))
-            for i, loc in enumerate([(centerA, centerB), (middleA, middleB), (outerA, outerB)]):
-                loc[0].append(fitParameters[i]['a'])
-                loc[1].append(fitParameters[i]['b'])
+        for nValue in [25, 50, 75, 100, 150, 200, 300, 400]:
+            try:
+                print(key)
+                fitParameters = variance_grid(pairData['{0}_data'.format(nValue)], 
+                                            pairData['{0}_boxes'.format(nValue)])
+                n.append(nValue)
+                i1.append(iKey[key[0]])
+                i2.append(iKey[key[1]])
+                t.append(int(key[2:len(key)]))
+                for i, loc in enumerate([(centerA, centerB, centerC), (middleA, middleB, middleC), (outerA, outerB, outerC)]):
+                    loc[0].append(fitParameters[i]['a'])
+                    loc[1].append(fitParameters[i]['b'])
+                    loc[2].append(fitParameters[i]['c'])
+            except:
+                continue
 
     a = {'n': n, 'i1': i1, 'i2': i2, 'tDiff': t, 'center': centerA, 'middle': middleA, 'outer': outerA}
     b = {'n': n, 'i1': i1, 'i2': i2, 'tDiff': t, 'center': centerB, 'middle': middleB, 'outer': outerB}
+    c = {'n': n, 'i1': i1, 'i2': i2, 'tDiff': t, 'center': centerC, 'middle': middleC, 'outer': outerC}
     dfA = pd.DataFrame(a)
     dfB = pd.DataFrame(b)
+    dfC = pd.DataFrame(c)
 
-    return dfA, dfB
+    return dfA, dfB, dfC
 
-def plot_variance_coefficients(df, yAxis='center', xAxis='n', cAxis='tDiff', i1='mdi', i2='mdi'):
+def plot_variance_ns(data):
+    d = data
+    dt = [1, 3, 12, 24, 36, 48]
+    n = [25, 50, 75, 100, 150, 200, 300, 400]
+
+    d['mm1_400'][0][(d['mm1_400'][0] > 4000)] = np.nan
+    d['mm1_400'][1][(d['mm1_400'][0] > 4000)] = np.nan
+    
+    res_sums = 0
+    for nVal in n:
+        plt.figure(nVal)
+        f = plt.gca()
+        for time in dt:
+            x = d['mm{0}_{1}'.format(time, nVal)][0]
+            y = d['mm{0}_{1}'.format(time, nVal)][1]
+            scattered = f.plot(x, y, '.', ms=10, label='{0} hrs'.format(time))
+            c = scattered[0].get_color()
+            params = fit_xy(x, y, 'powerC')
+            res_sums += params['res']
+            xx = np.linspace(0, np.nanmax(x), 1000)
+            yy = power_law(xx, params['a'], params['b'], params['c'])
+            if nVal==400 and time==1:
+                print(params)
+            f.plot(xx, yy, color=c)
+        plt.legend()
+    print(res_sums)
+    plt.show()
+
+def plot_variance_coefficients(df, coeff='a', yAxis='center', xAxis='n', zAxis='tDiff', i1='mdi', i2='mdi'):
+    """Takes a dataframe containing fit coefficients for variance grids and
+    plots them as a function of yaxis.
+
+    coeff:      what coefficient that is being plotted
+    yAxis:      which coefficient (center, middle, outer disk) to plot
+    xAxis:      the independent variable to plot_fits
+    cAxis:      secondary variable to separate data sets
+    i1:         reference instrument
+    i2:         secondary instrument
+    """
+
     x = df[xAxis][(df['i1'] == i1) & (df['i2'] == i2)].as_matrix()
     y = df[yAxis][(df['i1'] == i1) & (df['i2'] == i2)].as_matrix()
-    colors = df[cAxis][(df['i1'] == i1) & (df['i2'] == i2)].as_matrix()
-    norm = matplotlib.colors.LogNorm(vmin=np.min(df[cAxis]), vmax=np.max(df[cAxis]))
+    z = df[zAxis][(df['i1'] == i1) & (df['i2'] == i2)].as_matrix().astype(np.float32)
+    z[(z < 1)] = .25
+    norm1 = matplotlib.colors.LogNorm(vmin=np.min(z), vmax=np.max(z))
+    norm2 = matplotlib.colors.LogNorm(vmin=np.min(x), vmax=np.max(x))
 
-    for segment in set(colors):
-        ind = (colors == segment)
-        plt.scatter(x[ind], y[ind], c=cm.viridis(norm(colors[ind][0])), edgecolor='face', cmap='viridis')
-        plt.plot(x[ind], y[ind], c=cm.viridis(norm(colors[ind][0])))
+    f, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
 
-    ax = plt.gca()
-    fig_title = 'stuff'
-    ax.set_ylabel(yAxis)
-    ax.set_xlabel(xAxis)
+    for segment in sorted(set(z)):
+    
+        ind = (z == segment)
+        ax1.scatter(x[ind], y[ind], c=cm.viridis(norm1(z[ind][0])), 
+                edgecolor='face', cmap='viridis')
+        ax1.plot(x[ind], y[ind], 
+            c=cm.viridis(norm1(z[ind][0])), 
+            label='{0} hr'.format(segment))
+
+    for segment in sorted(set(x)):
+        ind = (x == segment)
+        ax2.scatter(z[ind], y[ind], c=cm.viridis(norm2(x[ind][0])), 
+                edgecolor='face', cmap='viridis')
+        ax2.plot(z[ind][np.argsort(z[ind])], y[ind][np.argsort(z[ind])], 
+            c=cm.viridis(norm2(x[ind][0])),
+            label='n = {0}'.format(segment))
+
+    f = plt.gcf()
+    fig_title = "{0}/{1}".format(i1.upper(), i2.upper())
+    f.suptitle(fig_title, y=.95, fontsize=30, fontweight='bold')
+    ax1.set_ylabel('{0} Disk {1} Coefficient'.format(yAxis.title(), coeff))
+    ax1.set_xlabel('{0}'.format(xAxis))
+    ax2.set_xlabel('{0}'.format(zAxis))
+    plt.legend(loc=4)
 
 def add_box_legend(axes, cuts):
+    """
+    Takes in a set of mpl axes and adds a legend depicting disk location."""
     plt.rc('text', usetex=True)
     brown_patch = matplotlib.patches.Patch(color=(80/255, 60/255, 0), 
             label=r'$0\degree-30\degree$')
@@ -496,12 +601,19 @@ def add_box_legend(axes, cuts):
             label=r'$30\degree-45\degree$')
     blue_patch = matplotlib.patches.Patch(color=(114/255, 178/255, 229/255), 
             label=r'$45\degree-70\degree$')
+    purple_patch = matplotlib.patches.Patch(color=(114/255, 40/255, 124/255), 
+            label=r'$45\degree-70\degree$')
+    peach_patch = matplotlib.patches.Patch(color=(255/255, 208/255, 171/255), 
+            label=r'$45\degree-70\degree$')
 
-    axes[0].legend(loc=2, handles=[brown_patch], frameon=False)
-    axes[1].legend(loc=2, handles=[green_patch], frameon=False)
-    axes[2].legend(loc=2, handles=[blue_patch], frameon=False)
+    patches = [brown_patch, green_patch, blue_patch, purple_patch, peach_patch]
+
+    for i, plot in enumerate(axes):
+        plot.legend(loc=2, handles=[patches[i]], frameon=False)
 
 def add_equations(axes, fits, fitType = 'power', loc='top'):
+    """Formats latex equations for curve fitting and displays them on plots."""
+
     plt.rc('text', usetex=True)
     if loc=='top': l = 30
     else: l = 5
@@ -622,8 +734,11 @@ def plot_block_parameters(bl, save=False):
     f.colorbar(plots, cax=cbar_ax)
     ax[0].set(aspect='equal', xlabel=r'$\mathrm{{Linear\ (Mx/cm^2)}}$', 
                 ylabel=r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()))
-    ax[1].set(aspect='equal', xlabel=r'$\mathrm{{Logarithmic\ (sign*log(abs(Mx/cm^2))}}$')
-    f.text(.40, .07, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ }}$'.format(i2.upper()))
+    ax[1].set(aspect='equal', 
+                xlabel=r'$\mathrm{{Logarithmic\ (sign*log(abs(Mx/cm^2))}}$')
+    f.text(.40, .07, 
+        r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ }}$'.format(i2.upper())
+        )
     fig_title = "Time Difference Between Magnetograms: " + tDiff + \
         '\n' + 'n = ' + str(bl['n'])
     f.suptitle(fig_title, y=.95, fontsize=30, fontweight='bold')
@@ -694,3 +809,17 @@ def plot_coefficients():
     f.suptitle(fig_title, y=.97, fontsize=30, fontweight='bold')
 
     return fitParameters
+
+def to_matlab(iP):
+    d = {}
+    for key, pairData in iP.items():
+        for nValue in [25, 50, 75, 100, 150, 200, 300, 400]:
+            try:
+                medians = np.abs(np.array([x['correctedMed'] for x in 
+                                    pairData['{0}_boxes'.format(str(nValue))][0]]))
+                stdevs = np.abs(np.array([x['correctedStd'] for x in 
+                                    pairData['{0}_boxes'.format(str(nValue))][0]]))
+                dict_str = key + '_' + str(nValue)
+                d[dict_str] = np.array([medians, stdevs])
+            except: continue
+    return d
