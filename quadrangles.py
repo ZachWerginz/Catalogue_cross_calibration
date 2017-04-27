@@ -23,7 +23,7 @@ class Quadrangle:
         self.lon = (self.min_longitude(mgnt, i), self.max_longitude(mgnt, i))
         self.diskAngle = self.averageDA(mgnt, i)
         self.area = self.sum_area(mgnt, i)
-        self.fluxDensity = self.mean_flux_density(mgnt.im_corr, i)
+        self.fluxDensity = self.mean_flux_density(mgnt.im_corr.v, i)
         if m2 is not None:
             self.fluxDensity2 = self.mean_flux_density(m2.remap, i)
             self.date2 = m2.im_raw.date
