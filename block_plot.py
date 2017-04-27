@@ -595,21 +595,16 @@ def add_box_legend(axes, cuts):
     """
     Takes in a set of mpl axes and adds a legend depicting disk location."""
     plt.rc('text', usetex=True)
-    brown_patch = matplotlib.patches.Patch(color=(80/255, 60/255, 0), 
-            label=r'$0\degree-30\degree$')
-    green_patch = matplotlib.patches.Patch(color=(81/255, 178/255, 76/255), 
-            label=r'$30\degree-45\degree$')
-    blue_patch = matplotlib.patches.Patch(color=(114/255, 178/255, 229/255), 
-            label=r'$45\degree-70\degree$')
-    purple_patch = matplotlib.patches.Patch(color=(114/255, 40/255, 124/255), 
-            label=r'$45\degree-70\degree$')
-    peach_patch = matplotlib.patches.Patch(color=(255/255, 208/255, 171/255), 
-            label=r'$45\degree-70\degree$')
-
-    patches = [brown_patch, green_patch, blue_patch, purple_patch, peach_patch]
+    colors =  [(80, 60, 0), (81, 178, 76), (114, 178, 229), 
+               (111, 40, 124), (255, 208, 171)]
+    colors = [tuple(map(lambda x: x/255, c)) for c in colors]
 
     for i, plot in enumerate(axes):
-        plot.legend(loc=2, handles=[patches[i]], frameon=False)
+        plot.legend(loc=2, 
+            handles=[matplotlib.patches.Patch(
+                color=colors[i],
+                label=r'${:d}^{{\circ}} - {:d}^{{\circ}}$'.format(cuts[i], cuts[i+1]))],
+            frameon=False)
 
 def add_equations(axes, fits, fitType = 'power', loc='top'):
     """Formats latex equations for curve fitting and displays them on plots."""
