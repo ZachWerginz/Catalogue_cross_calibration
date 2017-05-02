@@ -59,7 +59,8 @@ def load_local_cc_data():
                 'mm48': 'MDI_MDI_48.pkl',
                 'mh1':  'MDI_HMI_1.pkl',
                 'hh0': 'HMI_HMI_0.pkl',
-                'hh24': 'HMI_HMI_24.pkl'}
+                'hh24': 'HMI_HMI_24.pkl',
+                'hh48': 'HMI_HMI_48.pkl'}
     instrumentPairs = {}
     for pair, name in fileNames.items():
         with open(name, 'rb') as f:
