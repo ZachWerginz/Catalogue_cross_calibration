@@ -83,10 +83,10 @@ def fit_medians(h, fitType='power', corrected=False):
 def fit_xy(x, y, fitType='power'):
     ind = (np.isfinite(x) & np.isfinite(y))
     if fitType=='power':
-        popt = scipy.optimize.least_squares(power_func, [1, .5],
+        popt = scipy.optimize.least_squares(power_func, [1, 1],
                         args=(x[ind], y[ind]), bounds=([0,0], [np.inf, np.inf]),
                         ftol=1e-8, xtol=1e-8, gtol=1e-8, x_scale='jac',
-                        jac='3-point', loss='soft_l1', f_scale=.5)
+                        jac='3-point', loss='soft_l1', f_scale=.1)
     elif fitType=='powerC':
         popt = scipy.optimize.least_squares(power_func_intercept, [1, .5, 1], 
                         args=(x[ind], y[ind]), max_nfev=10000,
@@ -353,14 +353,15 @@ def corrected_box_plot(bl, dL, ax, clr='blue', **kwargs):
 
     return hl
 
-def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, **kwargs):
+def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return_fits=False, **kwargs):
     """Splits box plots into sections of degrees from disk center."""
 
     i1 = bl['i1']
     i2 = bl['i2']
+    l = len(diskCuts) - 1
     tDiff = str(round(bl['timeDifference'].total_seconds()/3600, 1)) + ' hours'
     diskCutData = []
-    f, grid = plt.subplots(1, len(diskCuts) - 1, sharey=True, figsize=(24, 13))
+    f, grid = plt.subplots(1, l, sharey=True, figsize=(24, 13))
     f.subplots_adjust(left=.05, right=.94, bottom=.20, top=.75, wspace=0)
     colors =   [(80/255, 60/255, 0), 
                 (81/255, 178/255, 76/255),
@@ -369,7 +370,7 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, **kwar
                 (255/255, 208/255, 171/255)]
     #-----------------------------Extract box data------------------------------
     if fullSectorData is None:
-        for i in range(len(diskCuts)-1):
+        for i in range(l):
             diskCutData.append(corrected_box_plot(bl, diskCuts[i:i+2], grid[i], clr=colors[i], **kwargs))
             diskCutData[i][0]['c'] = colors[i]
     else:
@@ -393,7 +394,7 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, **kwar
         labelpad=25, rotation=270)
     grid[-1].yaxis.set_ticks_position('right')
     grid[-1].yaxis.set_label_position('right')
-    f.text(.40, .17, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i2.upper()))
+    f.text(.40, .13, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i2.upper()))
     fig_title = "Time Difference Between Magnetograms: " + tDiff + \
         '\n' + 'n = ' + str(bl['n'])
     f.suptitle(fig_title, y=.85, fontsize=30, fontweight='bold')
@@ -421,7 +422,10 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, **kwar
     add_equations(grid, fitParametersPower, 'power', 'bot')
     add_equations(grid, fitParametersLinear, 'linear', 'top')
 
-    return diskCutData
+    if return_fits:
+        return diskCutData, fitParametersPower, fitParametersLinear
+    else:
+        return diskCutData
 
 def variance_grid(bl, fullSectorData=None, diskCuts=[0, 20, 45, 90], **kwargs):
     #----------Initialize Tex and data if not passed----------------------------
@@ -623,58 +627,58 @@ def add_equations(axes, fits, fitType = 'power', loc='top'):
 
     if fitType=='power':
         for i, ax in enumerate(axes):
-            aUncSF = -int(np.floor(np.log10(np.abs(fits[i]['aUnc']))))
-            bUncSF = -int(np.floor(np.log10(np.abs(fits[i]['bUnc']))))
-            if aUncSF==0: aUncSF = None
-            if bUncSF==0: bUncSF = None
+            # aUncSF = -int(np.floor(np.log10(np.abs(fits[i]['aUnc']))))
+            # bUncSF = -int(np.floor(np.log10(np.abs(fits[i]['bUnc']))))
+            #if aUncSF==0: aUncSF = None
+            #if bUncSF==0: bUncSF = None
             ax.annotate(
                 baseEqStr.format(
-                round(float(fits[i]['a']), aUncSF), 
-                round(float(fits[i]['aUnc']), aUncSF), 
-                round(float(fits[i]['b']), bUncSF), 
-                round(float(fits[i]['bUnc']), bUncSF)), 
+                round(float(fits[i]['a']), 2), 
+                round(float(fits[i]['aUnc']), 2), 
+                round(float(fits[i]['b']), 2), 
+                round(float(fits[i]['bUnc']), 2)), 
                 xy=(1,0), xycoords='axes fraction',
                 xytext=(-5, l), textcoords='offset points',
                 ha='right', va='bottom')
     elif fitType=='powerC':
         for i, ax in enumerate(axes):
-            aUncSF = -int(np.floor(np.log10(np.abs(fits[i]['aUnc']))))
-            bUncSF = -int(np.floor(np.log10(np.abs(fits[i]['bUnc']))))
-            cUncSF = -int(np.floor(np.log10(np.abs(fits[i]['cUnc']))))
-            if aUncSF==0: aUncSF = None
-            if bUncSF==0: bUncSF = None
-            if cUncSF==0: cUncSF = None
+            # aUncSF = -int(np.floor(np.log10(np.abs(fits[i]['aUnc']))))
+            # bUncSF = -int(np.floor(np.log10(np.abs(fits[i]['bUnc']))))
+            # cUncSF = -int(np.floor(np.log10(np.abs(fits[i]['cUnc']))))
+            #if aUncSF==0: aUncSF = None
+            #if bUncSF==0: bUncSF = None
+            #if cUncSF==0: cUncSF = None
             ax.annotate(
                 baseEqStr.format(
-                round(float(fits[i]['a']), aUncSF), 
-                round(float(fits[i]['aUnc']), aUncSF), 
-                round(float(fits[i]['b']), bUncSF), 
-                round(float(fits[i]['bUnc']), bUncSF),
-                round(float(fits[i]['c']), cUncSF), 
-                round(float(fits[i]['cUnc']), cUncSF)), 
+                round(float(fits[i]['a']), 2), 
+                round(float(fits[i]['aUnc']), 2), 
+                round(float(fits[i]['b']), 2), 
+                round(float(fits[i]['bUnc']), 2),
+                round(float(fits[i]['c']), 2), 
+                round(float(fits[i]['cUnc']), 2)), 
                 xy=(1,0), xycoords='axes fraction',
                 xytext=(-5, l), textcoords='offset points',
                 ha='right', va='bottom')
     elif fitType=='linearC':
         for i, ax in enumerate(axes):
-            aUncSF = -int(np.floor(np.log10(np.abs(fits[i]['aUnc']))))
-            bUncSF = -int(np.floor(np.log10(np.abs(fits[i]['bUnc']))))
-            if aUncSF==0: aUncSF = None
+            # aUncSF = -int(np.floor(np.log10(np.abs(fits[i]['aUnc']))))
+            # bUncSF = -int(np.floor(np.log10(np.abs(fits[i]['bUnc']))))
+            #if aUncSF==0: aUncSF = None
             ax.annotate(
                 baseEqStr.format(
-                round(float(fits[i]['a']), aUncSF), 
-                round(float(fits[i]['aUnc']), aUncSF), 
-                round(float(fits[i]['b']), bUncSF),
-                round(float(fits[i]['bUnc']), bUncSF)), 
+                round(float(fits[i]['a']), 2), 
+                round(float(fits[i]['aUnc']), 2), 
+                round(float(fits[i]['b']), 2),
+                round(float(fits[i]['bUnc']), 2)), 
                 xy=(1,0), xycoords='axes fraction',
                 xytext=(-5, l), textcoords='offset points',
                 ha='right', va='bottom')
     elif fitType=='linear':
         for i, ax in enumerate(axes):
-            aUncSF = abs(int(np.floor(np.log10(np.abs(fits[i]['aUnc'])))))
+            # aUncSF = abs(int(np.floor(np.log10(np.abs(fits[i]['aUnc'])))))
             ax.annotate(
                 baseEqStr.format(
-                round(fits[i]['a'], aUncSF), round(fits[i]['aUnc'], aUncSF)), 
+                round(fits[i]['a'], 2), round(fits[i]['aUnc'], 2)), 
                 xy=(1,0), xycoords='axes fraction',
                 xytext=(-5, l), textcoords='offset points',
                 ha='right', va='bottom')
