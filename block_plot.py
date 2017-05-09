@@ -361,8 +361,23 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return
     l = len(diskCuts) - 1
     tDiff = str(round(bl['timeDifference'].total_seconds()/3600, 1)) + ' hours'
     diskCutData = []
-    f, grid = plt.subplots(1, l, sharey=True, figsize=(24, 13))
-    f.subplots_adjust(left=.05, right=.94, bottom=.20, top=.75, wspace=0)
+    if l == 3:
+        rows = 1
+        columns = 3
+        f, grid = plt.subplots(rows, columns, sharey=True, figsize=(24, 13))
+        f.subplots_adjust(left=.05, right=.94, bottom=.20, top=.75, wspace=0)
+    elif l == 5:
+        f = plt.figure(figsize=(24, 13))
+        rows = 2
+        columns = 3
+        grid = []
+        grid.append(plt.subplot2grid((2,4), (0,0)))
+        grid.append(plt.subplot2grid((2,4), (0,1), colspan=2, sharey=grid[0]))
+        grid.append(plt.subplot2grid((2,4), (0,3), sharey=grid[0]))
+        grid.append(plt.subplot2grid((2,4), (1,0), colspan=2, sharey=grid[0]))
+        grid.append(plt.subplot2grid((2,4), (1,2), colspan=2, sharey=grid[3]))
+        f.subplots_adjust(left=.03, right=.94, bottom=.06, top=.77, hspace=.15, wspace=0)
+
     colors =   [(80/255, 60/255, 0), 
                 (81/255, 178/255, 76/255),
                 (114/255, 178/255, 229/255),
@@ -382,6 +397,7 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return
 
     for i, plot in enumerate(grid):
         plot.set_xlim(grid[0].get_ylim())
+        plot.set(adjustable='box-forced', aspect='equal')
         if i % 2 == 1: #even number
             plot.xaxis.set_ticks_position('top')
 
@@ -397,7 +413,7 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return
     f.text(.40, .13, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i2.upper()))
     fig_title = "Time Difference Between Magnetograms: " + tDiff + \
         '\n' + 'n = ' + str(bl['n'])
-    f.suptitle(fig_title, y=.85, fontsize=30, fontweight='bold')
+    f.suptitle(fig_title, y=.95, fontsize=30, fontweight='bold')
 
     lines = ["--",":"]
     linecycler = cycle(lines)
