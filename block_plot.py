@@ -376,7 +376,7 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return
         grid.append(plt.subplot2grid((2,4), (0,3), sharey=grid[0]))
         grid.append(plt.subplot2grid((2,4), (1,0), colspan=2, sharey=grid[0]))
         grid.append(plt.subplot2grid((2,4), (1,2), colspan=2, sharey=grid[3]))
-        f.subplots_adjust(left=.03, right=.94, bottom=.06, top=.77, hspace=.15, wspace=0)
+        f.subplots_adjust(left=.03, right=.94, bottom=.06, top=.77, hspace=.0, wspace=0)
 
     colors =   [(80/255, 60/255, 0), 
                 (81/255, 178/255, 76/255),
@@ -395,21 +395,35 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return
     lim = nLims[str(bl['n'])]
     grid[0].set_ylim(-lim, lim)
 
-    for i, plot in enumerate(grid):
-        plot.set_xlim(grid[0].get_ylim())
-        plot.set(adjustable='box-forced', aspect='equal')
-        if i % 2 == 1: #even number
-            plot.xaxis.set_ticks_position('top')
+    if l == 3:
+        for i, plot in enumerate(grid):
+            plot.set_xlim(grid[0].get_ylim())
+            plot.set(adjustable='box-forced', aspect='equal')
+            if i % 2 == 1: #even number
+                plot.xaxis.set_ticks_position('top')
+        grid[0].set_ylabel(
+            r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
+            labelpad=-.75)
+        grid[-1].set_ylabel(
+            r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
+            labelpad=25, rotation=270)
+        grid[-1].yaxis.set_ticks_position('right')
+        grid[-1].yaxis.set_label_position('right')
+    elif l == 5:
+        for i, plot in enumerate(grid):
+            plot.set_xlim(grid[0].get_ylim())
+            plot.set(adjustable='box-forced', aspect='equal')
+        f.text(.01, .65, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()), rotation=90)
+        f.text(.95, .65, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()), rotation=270)
 
-    #grid[1].xaxis.set_ticks_position('top')
-    grid[0].set_ylabel(
-        r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
-        labelpad=-.75)
-    grid[-1].set_ylabel(
-        r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
-        labelpad=25, rotation=270)
-    grid[-1].yaxis.set_ticks_position('right')
-    grid[-1].yaxis.set_label_position('right')
+    # grid[0].set_ylabel(
+    #     r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
+    #     labelpad=-.75)
+    # grid[-1].set_ylabel(
+    #     r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
+    #     labelpad=25, rotation=270)
+    #grid[-1].yaxis.set_ticks_position('right')
+    #grid[-1].yaxis.set_label_position('right')
     f.text(.40, .13, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i2.upper()))
     fig_title = "Time Difference Between Magnetograms: " + tDiff + \
         '\n' + 'n = ' + str(bl['n'])
@@ -838,3 +852,31 @@ def to_matlab(iP):
                 d[dict_str] = np.array([medians, stdevs])
             except: continue
     return d
+
+def create_5_plots():
+    yPad = .05
+    rowPad = 0.01
+    x = 24
+    y = 12
+    aspectRatio = y/x
+    size = (1 - yPad*2 - rowPad*2)/2
+    xPad = (1 - size*aspectRatio*3)/2
+    print(size)
+
+    fig = plt.figure(figsize=(x, y))
+    ax1 = fig.add_axes([xPad, .5 + rowPad, size*aspectRatio, size])
+    ax2 = fig.add_axes([xPad + (size*aspectRatio), .5 + rowPad, size*aspectRatio, size])
+    ax3 = fig.add_axes([xPad + (size*aspectRatio)*2, .5 + rowPad, size*aspectRatio, size])
+    ax4 = fig.add_axes([xPad + size*aspectRatio/2, yPad, size*aspectRatio, size])
+    ax5 = fig.add_axes([xPad + size*aspectRatio*3/2, yPad, size*aspectRatio, size])
+
+    ax1.xaxis.set_ticks_position('top')
+    ax1.xaxis.set_label_position('top')
+
+    ax2.yaxis.set_ticklabels('')
+    ax2.xaxis.set_ticks_position('top')
+
+    ax3.yaxis.set_ticks_position('right')
+    ax3.xaxis.set_ticks_position('top')
+
+    ax5.yaxis.set_ticks_position('right')
