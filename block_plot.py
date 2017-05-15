@@ -15,7 +15,6 @@ from scipy.odr import *
 from itertools import cycle, islice
 from mpl_toolkits.axes_grid1 import AxesGrid
 import random
-import ransac
 import quadrangles as quad
 
 __authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
@@ -356,6 +355,8 @@ def corrected_box_plot(bl, dL, ax, clr='blue', **kwargs):
 def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return_fits=False, **kwargs):
     """Splits box plots into sections of degrees from disk center."""
 
+    axis_font = {'size':'30'}
+
     i1 = bl['i1']
     i2 = bl['i2']
     l = len(diskCuts) - 1
@@ -366,17 +367,11 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return
         columns = 3
         f, grid = plt.subplots(rows, columns, sharey=True, figsize=(24, 13))
         f.subplots_adjust(left=.05, right=.94, bottom=.20, top=.75, wspace=0)
+        nLims = {'400': 2500, '399': 2250, '300': 2000, '200': 1500, '150': 1000, '100': 750, '75': 500, '50': 400, '25': 75}
     elif l == 5:
-        f = plt.figure(figsize=(24, 13))
-        rows = 2
-        columns = 3
-        grid = []
-        grid.append(plt.subplot2grid((2,4), (0,0)))
-        grid.append(plt.subplot2grid((2,4), (0,1), colspan=2, sharey=grid[0]))
-        grid.append(plt.subplot2grid((2,4), (0,3), sharey=grid[0]))
-        grid.append(plt.subplot2grid((2,4), (1,0), colspan=2, sharey=grid[0]))
-        grid.append(plt.subplot2grid((2,4), (1,2), colspan=2, sharey=grid[3]))
-        f.subplots_adjust(left=.03, right=.94, bottom=.06, top=.77, hspace=.0, wspace=0)
+        f, grid = create_5_plots()
+        nLims = {'400': 2500, '399': 2250, '300': 2000, '200': 1500, '150': 1000, '100': 750, '75': 500, '50': 400, '25': 22}
+        #f.subplots_adjust(left=.03, right=.94, bottom=.06, top=.77, hspace=.0, wspace=0)
 
     colors =   [(80/255, 60/255, 0), 
                 (81/255, 178/255, 76/255),
@@ -391,7 +386,7 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return
     else:
         diskCutData = fullSectorData
     #--------------------------Setting plot parameters--------------------------
-    nLims = {'400': 2500, '399': 2250, '300': 2000, '200': 1500, '150': 1000, '100': 750, '75': 500, '50': 400, '25': 75}
+    
     lim = nLims[str(bl['n'])]
     grid[0].set_ylim(-lim, lim)
 
@@ -409,25 +404,20 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return
             labelpad=25, rotation=270)
         grid[-1].yaxis.set_ticks_position('right')
         grid[-1].yaxis.set_label_position('right')
+        f.text(.40, .13, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i2.upper()), **axis_font)
     elif l == 5:
         for i, plot in enumerate(grid):
             plot.set_xlim(grid[0].get_ylim())
+            plot.set_ylim(grid[0].get_ylim())
             plot.set(adjustable='box-forced', aspect='equal')
-        f.text(.01, .65, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()), rotation=90)
-        f.text(.95, .65, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()), rotation=270)
+        f.text(.15, .65, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()), rotation=90, **axis_font)
+        f.text(.85, .65, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()), rotation=270, **axis_font)
+        f.text(.40, .06, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i2.upper()), **axis_font)
 
-    # grid[0].set_ylabel(
-    #     r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
-    #     labelpad=-.75)
-    # grid[-1].set_ylabel(
-    #     r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
-    #     labelpad=25, rotation=270)
-    #grid[-1].yaxis.set_ticks_position('right')
-    #grid[-1].yaxis.set_label_position('right')
-    f.text(.40, .13, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i2.upper()))
     fig_title = "Time Difference Between Magnetograms: " + tDiff + \
         '\n' + 'n = ' + str(bl['n'])
-    f.suptitle(fig_title, y=.95, fontsize=30, fontweight='bold')
+    print(fig_title)
+    f.suptitle(fig_title, y=.97, fontsize=30, fontweight='bold')
 
     lines = ["--",":"]
     linecycler = cycle(lines)
@@ -441,16 +431,16 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return
         fitParametersPower.append(fit_xy(x, y, 'power'))
         fitParametersLinear.append(fit_xy(x, y, 'linear'))
 
-    for i, g in enumerate(grid):
-        c = next(colorcycler)
-        plot_fits(fitParametersPower[i]['a'], fitParametersPower[i]['b'], ax=g, color=c,
-            linewidth=2, linestyle=next(linecycler), zorder=1)
-        plot_fits(fitParametersLinear[i]['a'], 0, fitType='linear', ax=g, color=c,
-            linewidth=2, linestyle=next(linecycler), zorder=1)
+    # for i, g in enumerate(grid):
+    #     c = next(colorcycler)
+    #     plot_fits(fitParametersPower[i]['a'], fitParametersPower[i]['b'], ax=g, color=c,
+    #         linewidth=2, linestyle=next(linecycler), zorder=1)
+    #     plot_fits(fitParametersLinear[i]['a'], 0, fitType='linear', ax=g, color=c,
+    #         linewidth=2, linestyle=next(linecycler), zorder=1)
 
     add_box_legend(grid, diskCuts)
-    add_equations(grid, fitParametersPower, 'power', 'bot')
-    add_equations(grid, fitParametersLinear, 'linear', 'top')
+    # add_equations(grid, fitParametersPower, 'power', 'bot')
+    # add_equations(grid, fitParametersLinear, 'linear', 'top')
 
     if return_fits:
         return diskCutData, fitParametersPower, fitParametersLinear
@@ -854,29 +844,31 @@ def to_matlab(iP):
     return d
 
 def create_5_plots():
-    yPad = .05
+    yPad = .1
     rowPad = 0.01
-    x = 24
-    y = 12
+    x = 36
+    y = 18
     aspectRatio = y/x
     size = (1 - yPad*2 - rowPad*2)/2
     xPad = (1 - size*aspectRatio*3)/2
-    print(size)
+    grid = []
 
     fig = plt.figure(figsize=(x, y))
-    ax1 = fig.add_axes([xPad, .5 + rowPad, size*aspectRatio, size])
-    ax2 = fig.add_axes([xPad + (size*aspectRatio), .5 + rowPad, size*aspectRatio, size])
-    ax3 = fig.add_axes([xPad + (size*aspectRatio)*2, .5 + rowPad, size*aspectRatio, size])
-    ax4 = fig.add_axes([xPad + size*aspectRatio/2, yPad, size*aspectRatio, size])
-    ax5 = fig.add_axes([xPad + size*aspectRatio*3/2, yPad, size*aspectRatio, size])
+    grid.append(fig.add_axes([xPad, .5 + rowPad, size*aspectRatio, size]))
+    grid.append(fig.add_axes([xPad + (size*aspectRatio) - .001, .5 + rowPad, size*aspectRatio, size]))
+    grid.append(fig.add_axes([xPad + (size*aspectRatio)*2 - .002, .5 + rowPad, size*aspectRatio, size]))
+    grid.append(fig.add_axes([xPad + size*aspectRatio/2, yPad, size*aspectRatio, size]))
+    grid.append(fig.add_axes([xPad + size*aspectRatio*3/2 - .001, yPad, size*aspectRatio, size]))
 
-    ax1.xaxis.set_ticks_position('top')
-    ax1.xaxis.set_label_position('top')
+    grid[0].xaxis.set_ticks_position('top')
+    grid[0].xaxis.set_label_position('top')
 
-    ax2.yaxis.set_ticklabels('')
-    ax2.xaxis.set_ticks_position('top')
+    grid[1].yaxis.set_ticklabels('')
+    grid[1].xaxis.set_ticks_position('top')
 
-    ax3.yaxis.set_ticks_position('right')
-    ax3.xaxis.set_ticks_position('top')
+    grid[2].yaxis.set_ticks_position('right')
+    grid[2].xaxis.set_ticks_position('top')
 
-    ax5.yaxis.set_ticks_position('right')
+    grid[4].yaxis.set_ticks_position('right')
+
+    return fig, grid
