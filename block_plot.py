@@ -16,6 +16,7 @@ from itertools import cycle, islice
 from mpl_toolkits.axes_grid1 import AxesGrid
 import random
 import quadrangles as quad
+from matplotlib.ticker import MaxNLocator
 
 __authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
 __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
@@ -39,7 +40,7 @@ def power_law(x, a, b, c):
     return (a*(x**b)) + c
 
 def power_func(p, x, y):
-    return (p[0]*(x**p[1])) + 5 - y
+    return (p[0]*(x**p[1])) - y
 
 def power_func_intercept(p, x, y):
     return (p[0]*(x**p[1])) + p[2] - y
@@ -56,34 +57,11 @@ def gaussian(x, A, sigma, mu):
 def gaussian_func(p, x, y):
     return p[0]/(np.sqrt(2*np.pi)*p[1])*np.exp(-(x-p[2])**2/(2.*p[1]**2)) - y
 
-def fit_medians(h, fitType='power', corrected=False):
-    """Deprecated"""
-    if corrected:
-        medy = [s['correctedMed'] for s in h]
-    else:
-        medy = [s['med'] for s in h]
-    medx = [s['sliceMed'] for s in h]
-    ind = (np.isfinite(medx) & np.isfinite(medy))
-    if fitType=='power':
-        popt = scipy.optimize.least_squares(power_func, [1, 1], args=(np.abs(medx)[ind], np.abs(medy)[ind]), loss='soft_l1', f_scale=.1)
-    elif fitType=='linear':
-        popt = scipy.optimize.least_squares(linear_func, [1], args=(np.abs(medx)[ind], np.abs(medy)[ind]), loss='soft_l1', f_scale=.1)
-    _, s, VT = np.linalg.svd(popt.jac, full_matrices=False)
-    threshold = np.finfo(float).eps * max(popt.jac.shape) * s[0]
-    s = s[s > threshold]
-    VT = VT[:s.size]
-    pcov = np.dot(VT.T / s**2, VT)
-    stderr = np.sqrt(np.diag(pcov))
-    if fitType=='power':
-        return {'a': popt.x[0], 'b': popt.x[1], 'aUnc': stderr[0], 'bUnc': stderr[1], 'sse': np.sum(popt.fun**2), 'n': len(medx), 'sst': np.sum((medy-np.mean(medy))**2)}
-    elif fitType=='linear':
-        return {'a': popt.x[0], 'aUnc': stderr[0], 'sse': np.sum(popt.fun**2), 'n': len(medx), 'sst': np.sum((medy-np.mean(medy))**2)}
-
 def fit_xy(x, y, fitType='power'):
     ind = (np.isfinite(x) & np.isfinite(y))
     if fitType=='power':
         popt = scipy.optimize.least_squares(power_func, [1, 1],
-                        args=(x[ind], y[ind]), bounds=([0,0], [np.inf, np.inf]),
+                        args=(x[ind], y[ind]), bounds=([.0,0], [np.inf, np.inf]),
                         ftol=1e-8, xtol=1e-8, gtol=1e-8, x_scale='jac',
                         jac='3-point', loss='soft_l1', f_scale=.1)
     elif fitType=='powerC':
@@ -315,7 +293,7 @@ def corrected_box_plot(bl, dL, ax, clr='blue', **kwargs):
         try:
             popt = scipy.optimize.least_squares(gaussian_func, 
                     [np.abs(bin['sliceMed']), np.abs(bin['sliceMed']/5), bin['sliceMed']], 
-                    args=(xspace[indValid], D[indValid]), 
+                    args=(xspace[indValid], D[indValid]), jac='3-point', x_scale='jac', 
                     loss='arctan', f_scale=.1).x
         except ValueError:
             try:
@@ -340,39 +318,34 @@ def corrected_box_plot(bl, dL, ax, clr='blue', **kwargs):
             medianprops=dict(linewidth=3.0), patch_artist=True, 
             showmeans=False, showfliers=False, showcaps=False)
 
-    for std, mean, x in zip(gaussianStds, y, x):
-        ax.plot([x, x], [mean+std, mean-std], color=clr, linestyle='-', alpha=.6)
+    # for std, mean, x in zip(gaussianStds, y, x):
+    #     ax.plot([x, x], [mean+std, mean-std], color=clr, linestyle='-', alpha=.6)
 
     for bx in box['boxes']:
         bx.set(edgecolor=clr, facecolor=clr, alpha=.75)
 
-    ax.set(aspect='equal')
     add_identity(ax, color='.3', ls='-', linewidth=3.0, zorder=1)
-
 
     return hl
 
-def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return_fits=False, **kwargs):
+def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, **kwargs):
     """Splits box plots into sections of degrees from disk center."""
 
-    axis_font = {'size':'30'}
+    axis_font = {'size':'30', 'horizontalalignment': 'center', 'verticalalignment': 'center'}
 
     i1 = bl['i1']
     i2 = bl['i2']
     l = len(diskCuts) - 1
     tDiff = str(round(bl['timeDifference'].total_seconds()/3600, 1)) + ' hours'
-    diskCutData = []
+    #-----------------------------Extract box data------------------------------
     if l == 3:
-        rows = 1
-        columns = 3
-        f, grid = plt.subplots(rows, columns, sharey=True, figsize=(24, 13))
+        f, grid = plt.subplots(1, 3, sharey=True, figsize=(24, 13))
         f.subplots_adjust(left=.05, right=.94, bottom=.20, top=.75, wspace=0)
-        nLims = {'400': 2500, '399': 2250, '300': 2000, '200': 1500, '150': 1000, '100': 750, '75': 500, '50': 400, '25': 75}
+        nLims = {'400': 2500, '399': 2250, '300': 2000, '200': 1500,
+                '150': 1000, '100': 750, '75': 500, '50': 400, '25': 75}
     elif l == 5:
         f, grid = create_5_plots()
-        nLims = {'400': 2500, '399': 2250, '300': 2000, '200': 1500, '150': 1000, '100': 750, '75': 500, '50': 400, '25': 22}
-        #f.subplots_adjust(left=.03, right=.94, bottom=.06, top=.77, hspace=.0, wspace=0)
-
+        
     colors =   [(80/255, 60/255, 0), 
                 (81/255, 178/255, 76/255),
                 (114/255, 178/255, 229/255),
@@ -380,6 +353,7 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return
                 (255/255, 208/255, 171/255)]
     #-----------------------------Extract box data------------------------------
     if fullSectorData is None:
+        diskCutData = []
         for i in range(l):
             diskCutData.append(corrected_box_plot(bl, diskCuts[i:i+2], grid[i], clr=colors[i], **kwargs))
             diskCutData[i][0]['c'] = colors[i]
@@ -387,10 +361,9 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return
         diskCutData = fullSectorData
     #--------------------------Setting plot parameters--------------------------
     
-    lim = nLims[str(bl['n'])]
-    grid[0].set_ylim(-lim, lim)
-
     if l == 3:
+        lim = nLims[str(bl['n'])]
+        grid[0].set_ylim(-lim, lim)
         for i, plot in enumerate(grid):
             plot.set_xlim(grid[0].get_ylim())
             plot.set(adjustable='box-forced', aspect='equal')
@@ -406,18 +379,19 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return
         grid[-1].yaxis.set_label_position('right')
         f.text(.40, .13, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i2.upper()), **axis_font)
     elif l == 5:
+        lim = np.max(np.array([(max(abs(x['sliceMed']), abs(x['correctedMed'])) + abs(x['correctedStd'])) for sec in diskCutData for x in sec]))*1.05
         for i, plot in enumerate(grid):
-            plot.set_xlim(grid[0].get_ylim())
-            plot.set_ylim(grid[0].get_ylim())
+            plot.set_xlim(-lim, lim)
+            plot.set_ylim(-lim, lim)
             plot.set(adjustable='box-forced', aspect='equal')
-        f.text(.15, .65, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()), rotation=90, **axis_font)
-        f.text(.85, .65, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()), rotation=270, **axis_font)
-        f.text(.40, .06, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i2.upper()), **axis_font)
+        f.text(.17, .5, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()), rotation=90, **axis_font)
+        f.text(.83, .5, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()), rotation=270, **axis_font)
+        f.text(.5, .065, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i2.upper()), **axis_font)
 
     fig_title = "Time Difference Between Magnetograms: " + tDiff + \
         '\n' + 'n = ' + str(bl['n'])
     print(fig_title)
-    f.suptitle(fig_title, y=.97, fontsize=30, fontweight='bold')
+    f.suptitle(fig_title, y=.98, fontsize=30, fontweight='bold')
 
     lines = ["--",":"]
     linecycler = cycle(lines)
@@ -427,25 +401,29 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, return
 
     for sec in diskCutData:
         x = np.abs(np.array([s['sliceMed'] for s in sec]))
-        y= np.abs(np.array([s['correctedMed'] for s in sec]))
+        y = np.abs(np.array([s['correctedMed'] for s in sec]))
         fitParametersPower.append(fit_xy(x, y, 'power'))
         fitParametersLinear.append(fit_xy(x, y, 'linear'))
 
-    # for i, g in enumerate(grid):
-    #     c = next(colorcycler)
-    #     plot_fits(fitParametersPower[i]['a'], fitParametersPower[i]['b'], ax=g, color=c,
-    #         linewidth=2, linestyle=next(linecycler), zorder=1)
-    #     plot_fits(fitParametersLinear[i]['a'], 0, fitType='linear', ax=g, color=c,
-    #         linewidth=2, linestyle=next(linecycler), zorder=1)
+    for i, g in enumerate(grid):
+        c = next(colorcycler)
+        plot_fits(fitParametersPower[i]['a'], fitParametersPower[i]['b'], ax=g, color=c,
+            linewidth=2, linestyle=next(linecycler), zorder=1)
+        plot_fits(fitParametersLinear[i]['a'], 0, fitType='linear', ax=g, color=c,
+            linewidth=2, linestyle=next(linecycler), zorder=1)
+
+    for ax, letter in zip(grid, 'abcde'):
+        ax.annotate(
+                '({0})'.format(letter),
+                xy=(0,1), xycoords='axes fraction',
+                xytext=(5, -24), textcoords='offset points',
+                ha='left', va='bottom', fontsize=19)
 
     add_box_legend(grid, diskCuts)
-    # add_equations(grid, fitParametersPower, 'power', 'bot')
-    # add_equations(grid, fitParametersLinear, 'linear', 'top')
+    add_equations(grid, fitParametersPower, 'power', 'bot')
+    add_equations(grid, fitParametersLinear, 'linear', 'top')
 
-    if return_fits:
-        return diskCutData, fitParametersPower, fitParametersLinear
-    else:
-        return diskCutData
+    return diskCutData
 
 def variance_grid(bl, fullSectorData=None, diskCuts=[0, 20, 45, 90], **kwargs):
     #----------Initialize Tex and data if not passed----------------------------
@@ -844,10 +822,10 @@ def to_matlab(iP):
     return d
 
 def create_5_plots():
-    yPad = .1
-    rowPad = 0.01
-    x = 36
-    y = 18
+    yPad = .12
+    rowPad = 0.0
+    x = 24
+    y = 12
     aspectRatio = y/x
     size = (1 - yPad*2 - rowPad*2)/2
     xPad = (1 - size*aspectRatio*3)/2
@@ -862,13 +840,15 @@ def create_5_plots():
 
     grid[0].xaxis.set_ticks_position('top')
     grid[0].xaxis.set_label_position('top')
-
     grid[1].yaxis.set_ticklabels('')
     grid[1].xaxis.set_ticks_position('top')
-
     grid[2].yaxis.set_ticks_position('right')
     grid[2].xaxis.set_ticks_position('top')
-
     grid[4].yaxis.set_ticks_position('right')
+
+    for x in grid:
+        x.xaxis.set_major_locator(MaxNLocator(nbins=7, prune='both'))
+        x.yaxis.set_major_locator(MaxNLocator(nbins=7, prune='both'))
+
 
     return fig, grid

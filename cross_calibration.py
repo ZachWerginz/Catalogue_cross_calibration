@@ -154,7 +154,7 @@ def coordinate_compare(i1, i2):
 
     return infoList
 
-def fix_longitude(f1, f2):
+def fix_longitude(f1, f2, raw_remap=False):
     """
     Will shift the longitude of second magnetogram to match the first.
 
@@ -177,18 +177,22 @@ def fix_longitude(f1, f2):
     if mgnt2.im_raw.dimensions[0].value > mgnt1.im_raw.dimensions[0].value:
         rotation = z.diff_rot(mgnt2, mgnt1)
         mgnt1.lonhRot = mgnt1.lonh + rotation.value
-        interpolate_remap(mgnt2, mgnt1)
+        interpolate_remap(mgnt2, mgnt1, raw_remap)
         return mgnt2, mgnt1
     else:
         rotation = z.diff_rot(mgnt1, mgnt2)
         mgnt2.lonhRot = mgnt2.lonh + rotation.value
-        interpolate_remap(mgnt1, mgnt2)
+        interpolate_remap(mgnt1, mgnt2, raw_remap)
         return mgnt1, mgnt2
     
-def interpolate_remap(m1, m2):
+def interpolate_remap(m1, m2, raw=False):
+    if raw:
+        v2 = m2.im_raw.data.flatten()
+    else:
+        v2 = m2.im_corr.v.flatten()
+
     x2 = m2.lonhRot.v.flatten()
     y2 = m2.lath.v.flatten()
-    v2 = m2.im_corr.v.flatten()
     x1 = m1.lonh.v.flatten()
     y1 = m1.lath.v.flatten()
     dim1 = m1.im_raw.dimensions
@@ -204,6 +208,7 @@ def interpolate_remap(m1, m2):
     new_m2 = np.full((int(dim1[0].value), int(dim1[1].value)), np.nan)
 
     new_m2.ravel()[ind1] = interp_data
+    new_m2[m2.rg > m2.rsun*np.sin(75.0*np.pi/180)] = np.nan
 
     m2.remap = new_m2
 

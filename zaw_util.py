@@ -37,7 +37,7 @@ def dateOffset(instr):
 
 def load_database():
     try:
-        conn = psy.connect("dbname='cross_calibration' user='zwerginz' host='minerva' password='8raSp6tr'")
+        conn = psy.connect("dbname='cross_calibration' user='zwerginz' host='10.0.1.65'")
     except:
         print ("I am unable to connect to the database")
         return
