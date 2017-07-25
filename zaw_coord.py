@@ -9,7 +9,7 @@ from astropy.io import fits
 import os.path
 import warnings
 
-import kpvt_class
+import kpvt
 from uncertainty import Measurement as M
 
 __authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]

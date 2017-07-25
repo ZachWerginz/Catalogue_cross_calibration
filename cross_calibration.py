@@ -2,19 +2,19 @@
 Provides the functions necessary for analyzing cross calibration
 between instruments.
 """
+import datetime as dt
+import getopt
+import itertools
+import random
+import sys
+
+import numpy as np
+import psycopg2 as psy
+from scipy.interpolate import griddata
+
+import quadrangles as quad
 import zaw_util as z
 from zaw_coord import CRD
-import quadrangles as quad
-import block_plot as b
-import datetime as dt
-import numpy as np
-import itertools
-from uncertainty import Measurement as M
-import random
-import getopt
-import sys
-from scipy.interpolate import griddata
-import psycopg2 as psy
 
 psy.extensions.register_adapter(np.float32, psy._psycopg.AsIs)
 DEC2FLOAT = psy.extensions.new_type(
