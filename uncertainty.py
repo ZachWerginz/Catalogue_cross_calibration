@@ -1,5 +1,5 @@
 import numpy as np
-import warnings
+np.seterr(invalid='ignore')
 
 class Measurement:
     #Set array priority to override some of ndarray's ufunc binary relations

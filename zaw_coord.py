@@ -1,15 +1,11 @@
 from __future__ import division
 import numpy as np
-
 import sunpy.map
-from sunpy.sun import constants
 from sunpy.sun import sun
 import astropy.units as u
 from astropy.io import fits
 import os.path
-import warnings
-
-import kpvt_class
+import kpvt
 from uncertainty import Measurement as M
 
 __authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
@@ -124,8 +120,7 @@ class CRD:
             x, y = self._grid()
             
     def __repr__(self):
-        super(CRD, self).__repr__()
-        #TODO: add attribute checks and fix Nonetype return error
+        pass
 
     def __del__(self):
         if not self.crdfn and hasattr(self, 'area'):

@@ -38,7 +38,6 @@ class Ch512Map(GenericMap):
         del self.meta['eph_b0']
         del self.meta['eph_l0']
 
-    @property
     def meta(self):
         return super(Ch512Map, self).meta()
 
@@ -86,8 +85,10 @@ class SPMGMap(GenericMap):
         self.meta['L0'] = self.meta['EPH_L0']
         del self.meta['eph_b0']
         del self.meta['eph_l0']
+        self.meta['instrume'] = 'SPECTROMAGNETOGRAPH'
+        self.meta['telescop'] = 'KITT PEAK'
 
-    @property
+
     def meta(self):
         return super(SPMGMap, self).meta()
 
@@ -110,4 +111,5 @@ class SPMGMap(GenericMap):
     @classmethod
     def is_datasource_for(cls, data, header, **kwargs):
         """Determines if header corresponds to an 512 Channel image"""
-        return header.get('instrume') == 'SPECTROMAGNETOGRAPH'
+        # Have to decide by dimensions since the header has duplicate instrument keywords
+        return header.get('naxis1') == 1788 and header.get('obs-site').startswith('KITT')

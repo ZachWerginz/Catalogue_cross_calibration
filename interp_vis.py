@@ -85,6 +85,9 @@ def plot_axis(f, firstImage, secondImage, wcs, orig):
 def main(m1=None, m2=None):
     if m1 is None or m2 is None:
         m1, m2 = data()
+
+    m1.crdfn = True
+    m2.crdfn = True
     axis_font = {'horizontalalignment': 'center', 'verticalalignment': 'center'}
     plt.rc('text', usetex=True)
     mpl.rcParams['text.latex.preamble'] = [
@@ -154,10 +157,10 @@ def main(m1=None, m2=None):
     ax3.xaxis.set_major_locator(MaxNLocator(nbins=7, prune='both'))
     ax3.yaxis.set_major_locator(MaxNLocator(nbins=7, prune='both'))
     add_identity(ax3, color='.3', ls='-', linewidth=3.0, zorder=1)
-    f4.suptitle("Fragmentation with n=25 and Flux Scatter Plot", y=.76, fontsize=30, fontweight='bold')
+    f4.suptitle("Fragmentation with n=25 and Flux Scatter Plot", y=.77, fontsize=30, fontweight='bold')
 
     axesList = []
-    for f in [f1,f2,f3,f4]:
+    for f in [f1,f2,f3]:
         axesList.extend(f.get_axes())
 
     for ax, letter in zip(axesList, 'abcdefghijklmno'):
@@ -170,6 +173,18 @@ def main(m1=None, m2=None):
                 xy=(0,1), xycoords='axes fraction',
                 xytext=(7, -25), textcoords='offset points',
                 ha='left', va='bottom', fontsize=19, color=c, family='serif')
+
+    for ax, letter in zip(f4.get_axes(), 'abc'):
+        if letter=='c':
+            c = 'black'
+        else:
+            c = 'white'
+        ax.annotate(
+                '{0}'.format(letter),
+                xy=(0,1), xycoords='axes fraction',
+                xytext=(7, -25), textcoords='offset points',
+                ha='left', va='bottom', fontsize=19, color=c, family='serif')
+
 
     plt.draw()
 
