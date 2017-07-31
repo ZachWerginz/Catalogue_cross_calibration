@@ -82,7 +82,7 @@ def plot_axis(f, firstImage, secondImage, wcs, orig):
 
     plt.draw()
 
-def main(m1, m2):
+def main(m1=None, m2=None):
     axis_font = {'horizontalalignment': 'center', 'verticalalignment': 'center'}
     plt.rc('text', usetex=True)
     mpl.rcParams['text.latex.preamble'] = [
@@ -173,3 +173,5 @@ def main(m1, m2):
 
     plt.show()
 
+if __name__ == '__main__':
+    main()
