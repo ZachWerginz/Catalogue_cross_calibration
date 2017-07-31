@@ -83,6 +83,8 @@ def plot_axis(f, firstImage, secondImage, wcs, orig):
     plt.draw()
 
 def main(m1=None, m2=None):
+    if m1 is None or m2 is None:
+        m1, m2 = data()
     axis_font = {'horizontalalignment': 'center', 'verticalalignment': 'center'}
     plt.rc('text', usetex=True)
     mpl.rcParams['text.latex.preamble'] = [
