@@ -27,8 +27,8 @@ def add_identity(axes, *line_args, **line_kwargs):
     axes.callbacks.connect('ylim_changed', callback)
 
 def data(raw_remap=False):
-    f1 = "spmg_eo100_C1_19920424_1430.fits"
-    f2 = "spmg_eo100_C1_19920425_1540.fits"
+    f1 = "test_mgnts\spmg_eo100_C1_19920424_1430.fits"
+    f2 = "test_mgnts\spmg_eo100_C1_19920425_1540.fits"
 
     if raw_remap:
         m1, m2 = c.fix_longitude(f1, f2, raw_remap=True)
