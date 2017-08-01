@@ -14,6 +14,7 @@ Pair = namedtuple('Pair', 'x y')
 __all__ = ["Ch512Map", "SPMGMap"]
 
 
+# noinspection PyUnresolvedReferences
 class Ch512Map(GenericMap):
     """KPVT 512 Channel Image Map.
 
@@ -37,6 +38,10 @@ class Ch512Map(GenericMap):
         self.meta['L0'] = self.meta['EPH_L0']
         del self.meta['eph_b0']
         del self.meta['eph_l0']
+
+    def __getitem__(self, key):
+        raise NotImplementedError(
+            "The ability to index Map by physical coordinate is not yet implemented.")
 
     @property
     def meta(self):
@@ -86,6 +91,10 @@ class SPMGMap(GenericMap):
         self.meta['L0'] = self.meta['EPH_L0']
         del self.meta['eph_b0']
         del self.meta['eph_l0']
+
+    def __getitem__(self, key):
+        raise NotImplementedError(
+            "The ability to index Map by physical coordinate is not yet implemented.")
 
     @property
     def meta(self):

@@ -195,8 +195,7 @@ class Measurement:
         return Measurement(self.v + left, self.u)
 
     def __iadd__(self, other):
-        result = self + other
-        return result
+        return self + other
 
     def __sub__(self, right):
         if isinstance(right, (float, np.ndarray, int)):
@@ -205,8 +204,7 @@ class Measurement:
         return Measurement(self.v - right.v, unc)
 
     def __rsub__(self, left):
-        result = self*-1 + left
-        return result
+        return Measurement(self.v*-1 + left, self.u*-1 + left)
 
     def __mul__(self, right):
         if isinstance(right, (float, np.ndarray, int)):
