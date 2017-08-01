@@ -5,7 +5,7 @@ import datetime as dt
 import numpy as np
 from astropy.io import fits
 import astropy.units as u
-from zaw_coord import CRD
+from coord import CRD
 import sunpy.time
 import sunpy.physics.differential_rotation as d
 import psycopg2 as psy

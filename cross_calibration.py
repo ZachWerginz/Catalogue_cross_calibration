@@ -14,7 +14,7 @@ from scipy.interpolate import griddata
 
 import quadrangles as quad
 import zaw_util as z
-from zaw_coord import CRD
+from coord import CRD
 
 psy.extensions.register_adapter(np.float32, psy._psycopg.AsIs)
 DEC2FLOAT = psy.extensions.new_type(

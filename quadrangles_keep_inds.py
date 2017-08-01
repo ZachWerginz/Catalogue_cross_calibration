@@ -1,4 +1,4 @@
-from zaw_coord import CRD
+from coord import CRD
 from uncertainty import Measurement as M
 import numpy as np
 import random

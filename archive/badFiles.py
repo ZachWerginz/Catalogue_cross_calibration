@@ -1,5 +1,5 @@
 import cross_calibration as c
-from zaw_coord import CRD
+from coord import CRD
 import numpy as np
 import psycopg2 as psy
 import zaw_util as z

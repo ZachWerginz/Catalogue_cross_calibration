@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib import cm
 from matplotlib import colors
-from zaw_coord import CRD
+from coord import CRD
 import copy
 import random
 import numpy as np
