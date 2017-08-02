@@ -208,7 +208,7 @@ def interpolate_remap(m1, m2, raw=False):
     new_m2 = np.full((int(dim1[0].value), int(dim1[1].value)), np.nan)
 
     new_m2.ravel()[ind1] = interp_data
-    new_m2[m2.rg > m2.rsun*np.sin(75.0*np.pi/180)] = np.nan
+    new_m2[m2.rg > m2.par['rsun']*np.sin(75.0*np.pi/180)] = np.nan
 
     m2.remap = new_m2
 

@@ -1,5 +1,5 @@
 from coord import CRD
-from uncertainty import Measurement as M
+import uncertainty.measurement as mnp
 import numpy as np
 import random
 
@@ -31,33 +31,33 @@ class Quadrangle:
             self.i2 = m2.im_raw.instrument
 
     def min_latitude(self, m, ind):
-        return M.nanmin(m.lath[ind])
+        return mnp.nanmin(m.lath[ind])
 
     def max_latitude(self, m, ind):
-        return M.nanmax(m.lath[ind])
+        return mnp.nanmax(m.lath[ind])
 
     def min_longitude(self, m, ind):
-        return M.nanmin(m.lonh[ind])
+        return mnp.nanmin(m.lonh[ind])
 
     def max_longitude(self, m, ind):
-        return M.nanmax(m.lonh[ind])
+        return mnp.nanmax(m.lonh[ind])
 
     def averageDA(self, m, ind):
         """Returns the angular distance from disk center in degrees."""
-        meanAngularRadius = M.nanmean(m.rg[ind])
-        return M.arcsin(meanAngularRadius/m.rsun)*180/np.pi
+        meanAngularRadius = mnp.nanmean(m.rg[ind])
+        return mnp.arcsin(meanAngularRadius/m.par['rsun'])*180/np.pi
 
     def mean_flux_density(self, arr, ind):
         """Returns the average corrected magnetic flux density."""
-        return M.mean(arr[ind])
+        return mnp.mean(arr[ind])
 
     def sum_area(self, m, ind):
         """Returns the total area covered by the quadrangle."""
         try:
-            return M.nansum(m.area[ind])
+            return mnp.nansum(m.area[ind])
         except AttributeError:
             m.eoa()
-            return M.nansum(m.area[ind])
+            return mnp.nansum(m.area[ind])
 
 def fragment_single(mgnt, n):
     """
@@ -93,13 +93,13 @@ def get_fragmentation_info(m, n):
     information such as latitude/longitude interval space.
     """
 
-    m.lonh[m.rg > m.rsun*np.sin(85.0*np.pi/180)] = np.nan
-    m.lath[m.rg > m.rsun*np.sin(85.0*np.pi/180)] = np.nan
+    m.lonh[m.rg > m.par['rsun']*np.sin(85.0*np.pi/180)] = np.nan
+    m.lath[m.rg > m.par['rsun']*np.sin(85.0*np.pi/180)] = np.nan
     _flatten(m)
 
     # This supports reusing latitude and longitude bands for other mgnts.
     latBands = _split(n)
-    lonBands = _split(n, M.nanmin(m.lonh), M.nanmax(m.lonh))
+    lonBands = _split(n, mnp.nanmin(m.lonh), mnp.nanmax(m.lonh))
     lonMasks = []
 
     for lon in lonBands:
@@ -177,7 +177,7 @@ def _flatten(m):
     m.lath_1d = m.lath.v.flatten()
     m.ind_1d = np.arange(np.size(m.lath_1d))
 
-    ind = np.where(M.isfinite(m.lonh_1d))
+    ind = np.where(mnp.isfinite(m.lonh_1d))
 
     m.lonh_1d = m.lonh_1d[ind]
     m.ind_1d = m.ind_1d[ind]

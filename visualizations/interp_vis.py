@@ -1,12 +1,9 @@
 import cross_calibration as c
-from scipy.interpolate import griddata
 import quadrangles_keep_inds as temp_q
-import itertools
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib import cm
 from matplotlib import colors
-from coord import CRD
 import copy
 import random
 import numpy as np
@@ -27,8 +24,8 @@ def add_identity(axes, *line_args, **line_kwargs):
     axes.callbacks.connect('ylim_changed', callback)
 
 def data(raw_remap=False):
-    f1 = "spmg_eo100_C1_19920424_1430.fits"
-    f2 = "spmg_eo100_C1_19920425_1540.fits"
+    f1 = "test_mgnts/spmg_eo100_C1_19920424_1430.fits"
+    f2 = "test_mgnts/spmg_eo100_C1_19920425_1540.fits"
 
     if raw_remap:
         m1, m2 = c.fix_longitude(f1, f2, raw_remap=True)
@@ -82,7 +79,9 @@ def plot_axis(f, firstImage, secondImage, wcs, orig):
 
     plt.draw()
 
-def main(m1, m2):
+def main(m1=None, m2=None):
+    if m1 is None or m2 is None:
+        m1, m2 = data()
     axis_font = {'horizontalalignment': 'center', 'verticalalignment': 'center'}
     plt.rc('text', usetex=True)
     mpl.rcParams['text.latex.preamble'] = [
@@ -93,28 +92,28 @@ def main(m1, m2):
     m1max = max(np.nanmin(m1.im_raw.data), np.nanmax(m1.im_raw.data))
 
     sun_orig = copy.deepcopy(m1.im_raw.data)
-    sun_orig[m1.rg < m1.rsun] = 500000
+    sun_orig[m1.rg < m1.par['rsun']] = 500000
 
-    #------------------Raw Before Rot/Interp-------------
+    # ------------------Raw Before Rot/Interp-------------
     f1 = plt.figure(1) 
     plot_axis(f1, m1.im_raw.data, m2.im_raw.data, m1.im_raw.wcs, sun_orig)
     f1.suptitle("Raw Data Before Rotation", y=.785, fontsize=30, fontweight='bold')
     f1.text(.235, .74, "SPMG {0}".format(m1.im_raw.date), fontsize=21, **axis_font)
     f1.text(.5, .74, "SPMG {0}".format(m2.im_raw.date), fontsize=21, **axis_font)
 
-    #--------------Radial Correction Before Rot/Interp-------------
+    # --------------Radial Correction Before Rot/Interp-------------
     f2 = plt.figure(2)
     plot_axis(f2, m1.im_corr.v, m2.im_corr.v, m1.im_raw.wcs, sun_orig)
     f2.suptitle("Radially Corrected Data Before Rotation", y=.76, fontsize=30, fontweight='bold')
 
-    #--------------Radial Correction After Rot/Interp-------------
+    # --------------Radial Correction After Rot/Interp-------------
     f3 = plt.figure(3)
     plot_axis(f3, m1.im_corr.v, m2.remap, m1.im_raw.wcs, sun_orig)
     f3.suptitle("Radially Corrected Data After Rotation and Interpolation", y=.76, fontsize=30, fontweight='bold')
 
     blocks_n = temp_q.fragment_multiple(m1, m2, 25)
 
-    #----------Plot last segmented panels because its special----
+    # ----------Plot last segmented panels because its special----
     f4= plt.figure(4)
     ax1 = f4.add_subplot(131, projection=m1.im_raw.wcs)
     ax2 = f4.add_subplot(132, projection=m1.im_raw.wcs)
@@ -138,8 +137,9 @@ def main(m1, m2):
         return "%i" %x
     ax3.xaxis.set_major_formatter(FuncFormatter(math_formatter))
     ax3.yaxis.set_major_formatter(FuncFormatter(math_formatter))
-    ax3.set_xlabel(r'$\mathrm{{Magnetic\ Flux\ Density\ (Mx/cm^2)}}$', labelpad=0)
-    ax3.set_ylabel(r'$\mathrm{{Magnetic\ Flux\ Density\ (Mx/cm^2)}}$', labelpad=20, rotation=270)
+    ax3.set_xlabel(r'$\mathrm{{Magnetic\ Flux\ Density\ (Mx/cm^2)}}$', labelpad=20, size=23, **axis_font)
+    ax3.set_ylabel(r'$\mathrm{{Magnetic\ Flux\ Density\ (Mx/cm^2)}}$', labelpad=20, rotation=270, size=23, **axis_font)
+    ax3.tick_params(width=5, labelsize=25)
     maxlimAx3 = max(*ax3.get_xlim(), *ax3.get_ylim())
     ax3.set_xlim(-maxlimAx3, maxlimAx3)
     ax3.set_ylim(-maxlimAx3, maxlimAx3)
@@ -152,22 +152,29 @@ def main(m1, m2):
     ax3.xaxis.set_major_locator(MaxNLocator(nbins=7, prune='both'))
     ax3.yaxis.set_major_locator(MaxNLocator(nbins=7, prune='both'))
     add_identity(ax3, color='.3', ls='-', linewidth=3.0, zorder=1)
-    f4.suptitle("Fragmentation with n=25 and Flux Scatter Plot", y=.76, fontsize=30, fontweight='bold')
+    f4.suptitle("Fragmentation with n=25 and Flux Scatter Plot", y=.77, fontsize=30, fontweight='bold')
 
     axesList = []
-    for f in [f1,f2,f3,f4]:
+    for f in [f1, f2, f3]:
         axesList.extend(f.get_axes())
 
-    for ax, letter in zip(axesList, 'abcdefghijklmno'):
-        if letter=='o':
-            c = 'black'
-        else:
-            c = 'white'
+    for ax, letter in zip(axesList, 'abcdefghijkl'):
         ax.annotate(
                 '{0}'.format(letter),
                 xy=(0,1), xycoords='axes fraction',
                 xytext=(7, -25), textcoords='offset points',
-                ha='left', va='bottom', fontsize=19, color=c, family='serif')
+                ha='left', va='bottom', fontsize=19, color='white', family='serif')
+
+    for ax, letter in zip(f4.get_axes(), 'abc'):
+        if letter == 'c':
+            color = 'black'
+        else:
+            color = 'white'
+        ax.annotate(
+                '{0}'.format(letter),
+                xy=(0,1), xycoords='axes fraction',
+                xytext=(7, -25), textcoords='offset points',
+                ha='left', va='bottom', fontsize=19, color=color, family='serif')
 
     plt.draw()
 

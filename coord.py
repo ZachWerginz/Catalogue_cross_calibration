@@ -7,7 +7,7 @@ from astropy.io import fits
 import os.path
 import kpvt
 
-import uncertainty.measurement as m
+import uncertainty.measurement as mnp
 
 __authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
 __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
@@ -23,8 +23,8 @@ class CRD:
     as an instance attribute for the object.
     """
 
-    RSUN_METERS = m.Measurement(sun.constants.radius.si.value, 26000)
-    DSUN_METERS = m.Measurement(sun.constants.au.si.value, 0)
+    RSUN_METERS = mnp.Measurement(sun.constants.radius.si.value, 26000)
+    DSUN_METERS = mnp.Measurement(sun.constants.au.si.value, 0)
 
     def __init__(self, filename):
         """Reads magnetogram as a sunpy.map object."""
@@ -39,26 +39,26 @@ class CRD:
         if self.im_raw.detector == '512':
             self.par['X0'] = self.im_raw.meta['CRPIX1A']
             self.par['Y0'] = self.im_raw.meta['CRPIX2A']
-            self.par['B0'] = m.Measurement(self.im_raw.meta['B0'], np.abs(self.im_raw.meta['B0']) * .01)
-            self.par['L0'] = m.Measurement(self.im_raw.meta['L0'], np.abs(self.im_raw.meta['L0']) * .01)
-            self.par['SL0'] = m.Measurement(0, 0)  # Stonyhurst L0
-            self.par['xscale'] = m.Measurement(self.im_raw.scale[0].value, 0.002)
-            self.par['yscale'] = m.Measurement(self.im_raw.scale[1].value, 0.002)
-            self.par['rsun'] = m.Measurement(self.im_raw.rsun_obs.value, 1)
+            self.par['B0'] = mnp.Measurement(self.im_raw.meta['B0'], np.abs(self.im_raw.meta['B0']) * .01)
+            self.par['L0'] = mnp.Measurement(self.im_raw.meta['L0'], np.abs(self.im_raw.meta['L0']) * .01)
+            self.par['SL0'] = mnp.Measurement(0, 0)  # Stonyhurst L0
+            self.par['xscale'] = mnp.Measurement(self.im_raw.scale[0].value, 0.002)
+            self.par['yscale'] = mnp.Measurement(self.im_raw.scale[1].value, 0.002)
+            self.par['rsun'] = mnp.Measurement(self.im_raw.rsun_obs.value, 1)
             self.par['dsun'] = self.DSUN_METERS
-        elif self.im_raw.detector == 'SPm.MeasurementG':
+        elif self.im_raw.detector == 'SPMG':
             self.par['X0'] = self.im_raw.meta['CRPIX1A']
             self.par['Y0'] = self.im_raw.meta['CRPIX2A']
-            self.par['B0'] = m.Measurement(self.im_raw.meta['B0'], np.abs(self.im_raw.meta['B0']) * .01)
-            self.par['L0'] = m.Measurement(self.im_raw.meta['L0'], np.abs(self.im_raw.meta['L0']) * .01)
-            self.par['SL0'] = m.Measurement(0, 0)  # Stonyhurst L0
-            self.par['xscale'] = m.Measurement(self.im_raw.scale[0].value, 0)
-            self.par['yscale'] = m.Measurement(self.im_raw.scale[1].value, 0)
-            self.par['rsun'] = m.Measurement(self.im_raw.rsun_obs.value, 1)
+            self.par['B0'] = mnp.Measurement(self.im_raw.meta['B0'], np.abs(self.im_raw.meta['B0']) * .01)
+            self.par['L0'] = mnp.Measurement(self.im_raw.meta['L0'], np.abs(self.im_raw.meta['L0']) * .01)
+            self.par['SL0'] = mnp.Measurement(0, 0)  # Stonyhurst L0
+            self.par['xscale'] = mnp.Measurement(self.im_raw.scale[0].value, 0)
+            self.par['yscale'] = mnp.Measurement(self.im_raw.scale[1].value, 0)
+            self.par['rsun'] = mnp.Measurement(self.im_raw.rsun_obs.value, 1)
             self.par['dsun'] = self.DSUN_METERS
         elif self.im_raw.detector == 'MDI':
-            self.par['rsun'] = m.Measurement(self.im_raw.rsun_obs.value, 1)
-            self.par['dsun'] = m.Measurement(self.im_raw.dsun.value, 0)
+            self.par['rsun'] = mnp.Measurement(self.im_raw.rsun_obs.value, 1)
+            self.par['dsun'] = mnp.Measurement(self.im_raw.dsun.value, 0)
             try:
                 self.P0 = self.im_raw.meta['p_angle']
             except KeyError:
@@ -67,34 +67,34 @@ class CRD:
                 self.im_raw = self.im_raw.rotate(angle=-self.P0 * u.deg)
             self.par['X0'], self.par['Y0'] = (x.value for x in self.im_raw.reference_pixel)
             try:
-                self.par['B0'] = m.Measurement(self.im_raw.meta['B0'], np.abs(self.im_raw.meta['B0']) * .01)
-                self.par['L0'] = m.Measurement(self.im_raw.meta['L0'], np.abs(self.im_raw.meta['L0']) * .01)
+                self.par['B0'] = mnp.Measurement(self.im_raw.meta['B0'], np.abs(self.im_raw.meta['B0']) * .01)
+                self.par['L0'] = mnp.Measurement(self.im_raw.meta['L0'], np.abs(self.im_raw.meta['L0']) * .01)
             except KeyError:
-                self.par['B0'] = m.Measurement(self.im_raw.meta['OBS_B0'], np.abs(self.im_raw.meta['OBS_B0']) * .01)
-                self.par['L0'] = m.Measurement(self.im_raw.meta['OBS_L0'], np.abs(self.im_raw.meta['OBS_L0']) * .01)
+                self.par['B0'] = mnp.Measurement(self.im_raw.meta['OBS_B0'], np.abs(self.im_raw.meta['OBS_B0']) * .01)
+                self.par['L0'] = mnp.Measurement(self.im_raw.meta['OBS_L0'], np.abs(self.im_raw.meta['OBS_L0']) * .01)
             self.par['SL0'] = self.par['L0'] - sun.heliographic_solar_center(self.im_raw.date)[0].value
             if self.par['SL0'] < -90: self.par['SL0'] += 360
             if self.par['SL0'] > 90: self.par['SL0'] -= 360
-            self.par['xscale'] = m.Measurement(1.982, 0.003)
-            self.par['yscale'] = m.Measurement(1.982, 0.003)
+            self.par['xscale'] = mnp.Measurement(1.982, 0.003)
+            self.par['yscale'] = mnp.Measurement(1.982, 0.003)
         elif self.im_raw.detector == 'HMI':
-            self.par['rsun'] = m.Measurement(self.im_raw.rsun_obs.value, 1)
-            self.par['dsun'] = m.Measurement(self.im_raw.dsun.value, 0)
+            self.par['rsun'] = mnp.Measurement(self.im_raw.rsun_obs.value, 1)
+            self.par['dsun'] = mnp.Measurement(self.im_raw.dsun.value, 0)
             self.P0 = self.im_raw.meta['CROTA2']
             if self.P0 != 0:
                 self.im_raw = self.im_raw.rotate(angle=-self.P0 * u.deg)
             self.par['X0'], self.par['Y0'] = (x.value for x in self.im_raw.reference_pixel)
-            self.par['B0'] = m.Measurement(self.im_raw.meta['CRLT_OBS'], np.abs(self.im_raw.meta['CRLT_OBS']) * .01)
-            self.par['L0'] = m.Measurement(self.im_raw.meta['CRLN_OBS'], np.abs(self.im_raw.meta['CRLN_OBS']) * .01)
+            self.par['B0'] = mnp.Measurement(self.im_raw.meta['CRLT_OBS'], np.abs(self.im_raw.meta['CRLT_OBS']) * .01)
+            self.par['L0'] = mnp.Measurement(self.im_raw.meta['CRLN_OBS'], np.abs(self.im_raw.meta['CRLN_OBS']) * .01)
             self.par['SL0'] = self.par['L0'] - sun.heliographic_solar_center(self.im_raw.date)[0].value
             if self.par['SL0'] < 0: self.par['SL0'] += 360
-            self.par['xscale'] = m.Measurement(self.im_raw.scale[0].value, 0.001)
-            self.par['yscale'] = m.Measurement(self.im_raw.scale[1].value, 0.001)
+            self.par['xscale'] = mnp.Measurement(self.im_raw.scale[0].value, 0.001)
+            self.par['yscale'] = mnp.Measurement(self.im_raw.scale[1].value, 0.001)
         else:
             print("Not a valid instrument or missing header information regarding instrument.")
             raise IOError
 
-        self.im_raw_u = m.Measurement(self.im_raw.data, np.abs(self.im_raw.data) * .10)
+        self.im_raw_u = mnp.Measurement(self.im_raw.data, np.abs(self.im_raw.data) * .10)
         # Fill in last bit of data if reading in cached file.
         if hasattr(self, 'lonh'):
             x, y = self._grid()
@@ -103,8 +103,9 @@ class CRD:
         print(self.im_raw.__repr__())
 
     def __del__(self):
-        if not self.cached and hasattr(self, 'area'):
-            self._save_cache()
+        # if not self.cached and hasattr(self, 'area'):
+        #    self._save_cache()
+        pass
 
     def meta(self):
         """Prints the sunpy map header."""
@@ -166,23 +167,23 @@ class CRD:
         elif array:
             print("Correcting line of sight magnetic field...")
             try:
-                lonh, lath = m.deg2rad(self.lonh), m.deg2rad(self.lath)
+                lonh, lath = mnp.deg2rad(self.lonh), mnp.deg2rad(self.lath)
             except AttributeError:
                 self.heliographic()
-                lonh, lath = m.deg2rad(self.lonh), m.deg2rad(self.lath)
+                lonh, lath = mnp.deg2rad(self.lonh), mnp.deg2rad(self.lath)
         else:
-            lonh, lath = m.deg2rad(self.heliographic(args[0], args[1]))
+            lonh, lath = mnp.deg2rad(self.heliographic(args[0], args[1]))
 
-        b0 = m.deg2rad(self.par['B0'])
-        sl0 = m.deg2rad(self.par['SL0'])
+        b0 = mnp.deg2rad(self.par['B0'])
+        sl0 = mnp.deg2rad(self.par['SL0'])
 
-        x_obs = m.cos(b0) * m.cos(sl0)
-        y_obs = m.cos(b0) * m.sin(sl0)
-        z_obs = m.sin(b0)
+        x_obs = mnp.cos(b0) * mnp.cos(sl0)
+        y_obs = mnp.cos(b0) * mnp.sin(sl0)
+        z_obs = mnp.sin(b0)
 
-        corr_factor = (m.cos(lath) * m.cos(lonh) * x_obs
-                       + m.cos(lath) * m.sin(lonh) * y_obs
-                       + m.sin(lath) * z_obs)
+        corr_factor = (mnp.cos(lath) * mnp.cos(lonh) * x_obs
+                       + mnp.cos(lath) * mnp.sin(lonh) * y_obs
+                       + mnp.sin(lath) * z_obs)
 
         if array:
             self.im_corr = self.im_raw_u / corr_factor
@@ -246,14 +247,14 @@ class CRD:
 
         # Calculate solid angle of pixel based on a pyrimid shaped polygon.
         # See http://planetmath.org/solidangleofrectangularpyramid
-        cross1 = m.cross(r1, r2, axis=0)
-        cross2 = m.cross(r3, r4, axis=0)
-        numerator1 = m.dot(cross1, r3)
-        numerator2 = m.dot(cross2, r1)
-        solid_angle1 = 2 * m.arctan2(numerator1,
-                                     (m.dot(r1, r2) + m.dot(r2, r3) + m.dot(r3, r1) + 1))
-        solid_angle2 = 2 * m.arctan2(numerator2,
-                                     (m.dot(r3, r4) + m.dot(r4, r1) + m.dot(r3, r1) + 1))
+        cross1 = mnp.cross(r1, r2, axis=0)
+        cross2 = mnp.cross(r3, r4, axis=0)
+        numerator1 = mnp.dot(cross1, r3)
+        numerator2 = mnp.dot(cross2, r1)
+        solid_angle1 = 2 * mnp.arctan2(numerator1,
+                                     (mnp.dot(r1, r2) + mnp.dot(r2, r3) + mnp.dot(r3, r1) + 1))
+        solid_angle2 = 2 * mnp.arctan2(numerator2,
+                                     (mnp.dot(r3, r4) + mnp.dot(r4, r1) + mnp.dot(r3, r1) + 1))
         solid_angle = solid_angle1 + solid_angle2
 
         r = self.RSUN_METERS * 100  # Convert to centimeters
@@ -313,14 +314,14 @@ class CRD:
         if corners:
             x_row = (np.arange(0, x_dim + 1) - self.par['X0'] - 0.5) * self.par['xscale']
             y_row = (np.arange(0, y_dim + 1) - self.par['Y0'] - 0.5) * self.par['yscale']
-            xg, yg = m.meshgrid(x_row, y_row)
-            rg = m.sqrt(xg ** 2 + yg ** 2)
+            xg, yg = mnp.meshgrid(x_row, y_row)
+            rg = mnp.sqrt(xg ** 2 + yg ** 2)
             self.Rg = rg
         else:
             x_row = (np.arange(0, x_dim) - self.par['X0']) * self.par['xscale']
             y_row = (np.arange(0, y_dim) - self.par['Y0']) * self.par['yscale']
-            xg, yg = m.meshgrid(x_row, y_row)
-            rg = m.sqrt(xg ** 2 + yg ** 2)
+            xg, yg = mnp.meshgrid(x_row, y_row)
+            rg = mnp.sqrt(xg ** 2 + yg ** 2)
             self.xg = xg
             self.yg = yg
             self.rg = rg
@@ -337,13 +338,13 @@ class CRD:
         x *= np.deg2rad(1) / 3600.0
         y *= np.deg2rad(1) / 3600.0
 
-        q = self.par['dsun'] * m.cos(y) * m.cos(x)
+        q = self.par['dsun'] * mnp.cos(y) * mnp.cos(x)
         distance = q ** 2 - self.par['dsun'] ** 2 + self.RSUN_METERS ** 2
-        distance = q - m.sqrt(distance)
+        distance = q - mnp.sqrt(distance)
 
-        rx = distance * m.cos(y) * m.sin(x)
-        ry = distance * m.sin(y)
-        rz = m.sqrt(self.RSUN_METERS ** 2 - rx ** 2 - ry ** 2)
+        rx = distance * mnp.cos(y) * mnp.sin(x)
+        ry = distance * mnp.sin(y)
+        rz = mnp.sqrt(self.RSUN_METERS ** 2 - rx ** 2 - ry ** 2)
 
         return rx, ry, rz
 
@@ -356,13 +357,13 @@ class CRD:
         Calculations taken and shortened
         from sunpy.wcs.
         """
-        cosb = m.cos(m.deg2rad(b0))
-        sinb = m.sin(m.deg2rad(b0))
+        cosb = mnp.cos(mnp.deg2rad(b0))
+        sinb = mnp.sin(mnp.deg2rad(b0))
 
-        hecr = m.sqrt(x ** 2 + y ** 2 + z ** 2)
-        hgln = m.arctan2(x, z * cosb - y * sinb) \
-            + m.deg2rad(l0)
-        hglt = m.arcsin((y * cosb + z * sinb) / hecr)
+        hecr = mnp.sqrt(x ** 2 + y ** 2 + z ** 2)
+        hgln = mnp.arctan2(x, z * cosb - y * sinb) \
+            + mnp.deg2rad(l0)
+        hglt = mnp.arcsin((y * cosb + z * sinb) / hecr)
 
         return hgln * 180 / np.pi, hglt * 180 / np.pi
 
@@ -386,10 +387,10 @@ class CRD:
         1, 1: bottom-right
         0, 1: top-right
         """
-        coslat = m.cos(lat)
-        coslon = m.cos(lon)
-        sinlat = m.sin(lat)
-        sinlon = m.sin(lon)
+        coslat = mnp.cos(lat)
+        coslon = mnp.cos(lon)
+        sinlat = mnp.sin(lat)
+        sinlon = mnp.sin(lon)
         l = len(lat)
         x_ar = coslat[i:l - 1 + i, j:l - 1 + j] * coslon[i:l - 1 + i, j:l - 1 + j]
         y_ar = coslat[i:l - 1 + i, j:l - 1 + j] * sinlon[i:l - 1 + i, j:l - 1 + j]
@@ -438,9 +439,9 @@ class CRD:
         mfits = fits.open(self.cached_fn)
         i = self._get_instrument(mfits)
         self.im_raw = sunpy.map.Map(mfits[i].data, mfits[i].header)
-        self.lonh = m.Measurement(mfits[i + 1].data[0], mfits[i + 1].data[1])
-        self.lath = m.Measurement(mfits[i + 2].data[0], mfits[i + 2].data[1])
-        self.area = m.Measurement(mfits[i + 3].data[0], mfits[i + 3].data[1])
-        self.im_corr = m.Measurement(mfits[i + 4].data[0], mfits[i + 4].data[1])
+        self.lonh = mnp.Measurement(mfits[i + 1].data[0], mfits[i + 1].data[1])
+        self.lath = mnp.Measurement(mfits[i + 2].data[0], mfits[i + 2].data[1])
+        self.area = mnp.Measurement(mfits[i + 3].data[0], mfits[i + 3].data[1])
+        self.im_corr = mnp.Measurement(mfits[i + 4].data[0], mfits[i + 4].data[1])
         self.cached = True
         mfits.close()

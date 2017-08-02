@@ -1,5 +1,5 @@
 import numpy as np
-
+np.seterr(invalid='ignore')
 
 def cos(x):
     try:
@@ -239,35 +239,32 @@ class Measurement:
     def __eq__(self, a):
         return np.equal(self.v, a.v)
 
-    def __gt__(self, a, b):
+    def __gt__(self, b):
         try:
-            return np.greater(a.v, b.v)
+            return np.greater(self.v, b.v)
         except AttributeError:
-            if isinstance(a, Measurement):
-                return np.greater(a.v, b)
-            else:
-                return np.greater(a, b.v)
+            return np.greater(self.v, b)
 
-    def __ge__(self, a, b):
+    def __ge__(self, b):
         try:
             return np.greater_equal(self.v, b.v)
         except AttributeError:
-            if isinstance(self, Measurement):
-                return np.greater_equal(self.v, b)
-            else:
-                return np.greater_equal(self, b.v)
+            return np.greater_equal(self.v, b)
 
-    def __lt__(self, a, b):
+    def __lt__(self, b):
         try:
-            return np.less(a.v, b.v)
+            return np.less(self.v, b.v)
         except AttributeError:
-            if isinstance(a, Measurement):
-                return np.less(a.v, b)
-            else:
-                return np.less(a, b.v)
+            return np.less(self.v, b)
 
-    def __and__(self, a, b):
-        return np.logical_and(a, b)
+    def __and__(self, b):
+        try:
+            return np.logical_and(self.v, b.v)
+        except AttributeError:
+            return np.logical_and(self.v, b)
 
-    def __or__(self, a, b):
-        return np.logical_or(a, b)
+    def __or__(self, b):
+        try:
+            return np.logical_or(self.v, b.v)
+        except AttributeError:
+            return np.logical_or(self.v, b)

@@ -1,5 +1,5 @@
 from coord import CRD
-from uncertainty import Measurement as M
+from uncertainty.measurement import Measurement as M
 import numpy as np
 import random
 
