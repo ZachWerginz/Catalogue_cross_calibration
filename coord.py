@@ -30,6 +30,12 @@ class CRD:
         """Reads magnetogram as a sunpy.map object."""
         self.fn = filename
         self.cached = False
+        self.im_corr = None
+        self.lath = None
+        self.lonh = None
+        self.mflux_corr = None
+        self.mflux_raw = None
+        self.area = None
         self.par = {}
         try:
             self._load_cache()
@@ -73,8 +79,10 @@ class CRD:
                 self.par['B0'] = mnp.Measurement(self.im_raw.meta['OBS_B0'], np.abs(self.im_raw.meta['OBS_B0']) * .01)
                 self.par['L0'] = mnp.Measurement(self.im_raw.meta['OBS_L0'], np.abs(self.im_raw.meta['OBS_L0']) * .01)
             self.par['SL0'] = self.par['L0'] - sun.heliographic_solar_center(self.im_raw.date)[0].value
-            if self.par['SL0'] < -90: self.par['SL0'] += 360
-            if self.par['SL0'] > 90: self.par['SL0'] -= 360
+            if self.par['SL0'] < -90:
+                self.par['SL0'] += 360
+            if self.par['SL0'] > 90:
+                self.par['SL0'] -= 360
             self.par['xscale'] = mnp.Measurement(1.982, 0.003)
             self.par['yscale'] = mnp.Measurement(1.982, 0.003)
         elif self.im_raw.detector == 'HMI':
@@ -87,7 +95,8 @@ class CRD:
             self.par['B0'] = mnp.Measurement(self.im_raw.meta['CRLT_OBS'], np.abs(self.im_raw.meta['CRLT_OBS']) * .01)
             self.par['L0'] = mnp.Measurement(self.im_raw.meta['CRLN_OBS'], np.abs(self.im_raw.meta['CRLN_OBS']) * .01)
             self.par['SL0'] = self.par['L0'] - sun.heliographic_solar_center(self.im_raw.date)[0].value
-            if self.par['SL0'] < 0: self.par['SL0'] += 360
+            if self.par['SL0'] < 0:
+                self.par['SL0'] += 360
             self.par['xscale'] = mnp.Measurement(self.im_raw.scale[0].value, 0.001)
             self.par['yscale'] = mnp.Measurement(self.im_raw.scale[1].value, 0.001)
         else:
@@ -251,10 +260,8 @@ class CRD:
         cross2 = mnp.cross(r3, r4, axis=0)
         numerator1 = mnp.dot(cross1, r3)
         numerator2 = mnp.dot(cross2, r1)
-        solid_angle1 = 2 * mnp.arctan2(numerator1,
-                                     (mnp.dot(r1, r2) + mnp.dot(r2, r3) + mnp.dot(r3, r1) + 1))
-        solid_angle2 = 2 * mnp.arctan2(numerator2,
-                                     (mnp.dot(r3, r4) + mnp.dot(r4, r1) + mnp.dot(r3, r1) + 1))
+        solid_angle1 = 2 * mnp.arctan2(numerator1, (mnp.dot(r1, r2) + mnp.dot(r2, r3) + mnp.dot(r3, r1) + 1))
+        solid_angle2 = 2 * mnp.arctan2(numerator2, (mnp.dot(r3, r4) + mnp.dot(r4, r1) + mnp.dot(r3, r1) + 1))
         solid_angle = solid_angle1 + solid_angle2
 
         r = self.RSUN_METERS * 100  # Convert to centimeters
@@ -361,8 +368,7 @@ class CRD:
         sinb = mnp.sin(mnp.deg2rad(b0))
 
         hecr = mnp.sqrt(x ** 2 + y ** 2 + z ** 2)
-        hgln = mnp.arctan2(x, z * cosb - y * sinb) \
-            + mnp.deg2rad(l0)
+        hgln = mnp.arctan2(x, z * cosb - y * sinb) + mnp.deg2rad(l0)
         hglt = mnp.arcsin((y * cosb + z * sinb) / hecr)
 
         return hgln * 180 / np.pi, hglt * 180 / np.pi
