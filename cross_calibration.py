@@ -13,7 +13,7 @@ import psycopg2 as psy
 from scipy.interpolate import griddata
 
 import quadrangles as quad
-import zaw_util as z
+import util as z
 from coord import CRD
 
 psy.extensions.register_adapter(np.float32, psy._psycopg.AsIs)

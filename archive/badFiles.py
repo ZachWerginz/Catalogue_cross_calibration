@@ -2,7 +2,7 @@ import cross_calibration as c
 from coord import CRD
 import numpy as np
 import psycopg2 as psy
-import zaw_util as z
+import util as z
 
 def main():
     conn = z.load_database()

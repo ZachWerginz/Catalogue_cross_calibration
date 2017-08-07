@@ -1,5 +1,5 @@
-import zaw_util as z
-import visualizations.block_plot as b
+import util as z
+import visualizations.cc_plot as b
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.stats import gaussian_kde

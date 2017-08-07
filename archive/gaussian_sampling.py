@@ -1,4 +1,4 @@
-import zaw_util as z
+import util as z
 import numpy as np
 import random
 from scipy.stats import gaussian_kde
