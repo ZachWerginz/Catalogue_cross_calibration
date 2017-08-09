@@ -189,17 +189,17 @@ def scatter_plot(dict1, dict2, separate=False):
 def box_plot(bl, dL, ax, clr='blue', corrections=False, **kwargs):
     """Creates a box plot and sets properties."""
     hl, x, y = hist_axis(bl, dL, **kwargs)
-    y = np.array([x['med'] for x in hl])
-    x = np.array([s['sliceMed'] for s in hl])
-    lim = max(np.max(np.abs(x)), np.max(np.abs(y)))*1.1
+    y2 = np.array([x['med'] for x in hl])
+    x2 = np.array([s['sliceMed'] for s in hl])
+    lim = max(np.max(np.abs(x2)), np.max(np.abs(y2)))*1.1
     box_list = [s['data'] for s in hl]
     # lim = max(abs(x[0]*1.10), abs(x[-1]*1.10))
-    box_widths = .4*(max(x) - min(x))/len(y)
-    box = ax.boxplot(box_list, widths=box_widths, positions=x, manage_xticks=False,
+    box_widths = .4*(max(x2) - min(x2))/len(y2)
+    box = ax.boxplot(box_list, widths=box_widths, positions=x2, manage_xticks=False,
                      whis=0, sym="", showcaps=False, patch_artist=True)
     
-    # ax.set_xlim(-lim, lim)
-    # ax.set_ylim(-lim, lim)
+    ax.set_xlim(-lim, lim)
+    ax.set_ylim(-lim, lim)
     ax.set(aspect='equal')
     add_identity(ax, color='.3', ls='-', linewidth=2, zorder=1)
 

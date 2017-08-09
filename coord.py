@@ -133,7 +133,7 @@ class CRD:
         lath, lonh = kpvt.heliographic()
         aia.heliographic(320, 288, array=False)
         """
-        if array and hasattr(self, 'lonh') and not corners:
+        if array and self.lonh is not None and not corners:
             return
 
         # Check for single coordinate or ndarray object.
@@ -171,14 +171,14 @@ class CRD:
         calulations.
         """
 
-        if array and hasattr(self, 'im_corr'):
+        if array and self.im_corr is not None:
             return
         elif array:
             print("Correcting line of sight magnetic field...")
-            try:
-                lonh, lath = mnp.deg2rad(self.lonh), mnp.deg2rad(self.lath)
-            except AttributeError:
+            if self.lonh is None:
                 self.heliographic()
+                lonh, lath = mnp.deg2rad(self.lonh), mnp.deg2rad(self.lath)
+            else:
                 lonh, lath = mnp.deg2rad(self.lonh), mnp.deg2rad(self.lath)
         else:
             lonh, lath = mnp.deg2rad(self.heliographic(args[0], args[1]))
@@ -213,7 +213,7 @@ class CRD:
         at the center of the sun.
         """
 
-        if array and hasattr(self, 'area'):
+        if array and self.area is not None:
             return
         # Assume coordinate is in center of pixel.
         # Information on pixel standard is in this article.
@@ -282,12 +282,12 @@ class CRD:
         if not array:
             return self.eoa(*args) * self.los_corr(*args)
         else:
-            if hasattr(self, 'mflux_corr'):
+            if self.mflux_corr is not None:
                 return
-            try:
-                area = self.area
-            except AttributeError:
+            if self.area is None:
                 self.eoa()
+                area = self.area
+            else:
                 area = self.area
 
             if raw_field:
@@ -296,15 +296,14 @@ class CRD:
                 self.mflux_raw = area * field
                 return
             else:
-                try:
-                    field = self.im_corr
-                except AttributeError:
+                if self.im_corr is None:
                     self.los_corr()
                     field = self.im_corr
-                finally:
-                    print("Calculating corrected magnetic flux...")
-                    self.mflux_corr = area * field
-                    return
+                else:
+                    field = self.im_corr
+                print("Calculating corrected magnetic flux...")
+                self.mflux_corr = area * field
+                return
 
     def _grid(self, corners=False):
         """Create an xy grid of coordinates for heliographic array.
