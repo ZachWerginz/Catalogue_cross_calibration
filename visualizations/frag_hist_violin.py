@@ -1,11 +1,14 @@
+"""This script was meant to create a set of 3 figures each with 3 plots showing the fragmentation of the solar disk,
+a 2-dimensional histogram and violin plots."""
+
 import cross_calibration as c
 import quadrangles_keep_inds as temp_q
 import matplotlib.pyplot as plt
 import visualizations.cc_plot as ccplot
-import copy
 import random
 import numpy as np
 import util as u
+
 
 def data(raw_remap=False):
     f1 = "test_mgnts/spmg_eo100_C1_19920424_1430.fits"
