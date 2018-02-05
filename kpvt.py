@@ -38,13 +38,17 @@ class Ch512Map(GenericMap):
         del self.meta['eph_b0']
         del self.meta['eph_l0']
 
+    def __getitem__(self, key):
+        raise NotImplementedError(
+            "The ability to index Map by physical coordinate is not yet implemented.")
+
     def meta(self):
         return super(Ch512Map, self).meta()
 
     @property
     def scale(self):
-        return Pair(self.meta['cdelt1'] * self.spatial_units.x / u.pixel * self.meta['CRR_SCLX'],
-                    self.meta['cdelt2'] * self.spatial_units.y / u.pixel * self.meta['CRR_SCLY'])
+        return Pair(self.meta['cdelt1'] * self.spatial_units[0] / u.pixel * self.meta['CRR_SCLX'],
+                    self.meta['cdelt2'] * self.spatial_units[1] / u.pixel * self.meta['CRR_SCLY'])
 
     @property
     def rsun_obs(self):
@@ -88,6 +92,9 @@ class SPMGMap(GenericMap):
         self.meta['instrume'] = 'SPECTROMAGNETOGRAPH'
         self.meta['telescop'] = 'KITT PEAK'
 
+    def __getitem__(self, key):
+        raise NotImplementedError(
+            "The ability to index Map by physical coordinate is not yet implemented.")
 
     def meta(self):
         return super(SPMGMap, self).meta()
@@ -105,8 +112,8 @@ class SPMGMap(GenericMap):
 
     @property
     def scale(self):
-        return Pair(self.meta['cdelt1'] * self.spatial_units.x / u.pixel * self.meta['CRR_SCLX'],
-                    self.meta['cdelt2'] * self.spatial_units.y / u.pixel * self.meta['CRR_SCLY'])
+        return Pair(self.meta['cdelt1'] * self.spatial_units[0] / u.pixel * self.meta['CRR_SCLX'],
+                    self.meta['cdelt2'] * self.spatial_units[1] / u.pixel * self.meta['CRR_SCLY'])
 
     @classmethod
     def is_datasource_for(cls, data, header, **kwargs):

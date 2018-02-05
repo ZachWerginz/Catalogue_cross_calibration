@@ -15,7 +15,7 @@ import pandas as pd
 import datetime as dt
 import uncertainty
 from uncertainty import Measurement as M
-import zaw_util
+import util
 from collections import OrderedDict
 import os.path
 import getopt
@@ -61,7 +61,7 @@ def parse_args():
 
     for opt, arg in opts:
         if opt in ("-d", "--data-root"):
-            zaw_util.data_root = arg
+            util.data_root = arg
         elif opt in ("-s", "--date-start"):
             d1 = arg
         elif opt in ("-e", "--date-end"):
@@ -69,7 +69,7 @@ def parse_args():
         elif opt in ("-i", "--instrument"):
             instr = arg
         elif opt in ("--debug"):
-            zaw_util.debug = True
+            util.debug = True
         else:
             assert False, "unhandled option"
 
@@ -81,8 +81,8 @@ def init(seg):
               'md_i': None,
               'md_f': None,
               'instrument': instr, 'deg_lim': 65.0, 'inv_px_tol': 0.85}
-    seg.meta['md_i'] = zaw_util.date2md(seg.meta['start_date'], seg.meta['instrument'])
-    seg.meta['md_f'] = zaw_util.date2md(seg.meta['end_date'], seg.meta['instrument'])
+    seg.meta['md_i'] = util.date2md(seg.meta['start_date'], seg.meta['instrument'])
+    seg.meta['md_f'] = util.date2md(seg.meta['end_date'], seg.meta['instrument'])
 
 def calc_pol(mgnt, pole, pf_data=None, meta={'deg_lim': 75.0, 'inv_px_tol': .85}):
     if pf_data is None:
@@ -194,7 +194,7 @@ def calc_parameters(mgnt, p, vp, posp, negp):
 def process(seg, date):
     while date <= seg.meta['end_date']:
         print(date)
-        mgnt = zaw_util.CRD_read(date, seg.meta['instrument'])
+        mgnt = util.CRD_read(date, seg.meta['instrument'])
         if mgnt != -1:
             print("Calculating polar parameters")
             data = data0.copy()
@@ -244,7 +244,7 @@ def main():
     if    d1 == None:    d1 = input('Enter starting date: ')
     if    d2 == None:    d2 = input('Enter end date: ')
     if instr == None: instr = input('Enter the instrument: ')
-    if zaw_util.data_root == '.': zaw_util.data_root = input('Enter data root:')
+    if util.data_root == '.': util.data_root = input('Enter data root:')
 
     # Initialize the segment data first.
     segment = PFData()

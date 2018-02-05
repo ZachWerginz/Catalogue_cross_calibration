@@ -5,7 +5,7 @@ import datetime as dt
 import numpy as np
 from astropy.io import fits
 import astropy.units as u
-from zaw_coord import CRD
+from coord import CRD
 import sunpy.time
 import sunpy.physics.differential_rotation as d
 import psycopg2 as psy
@@ -23,6 +23,7 @@ __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
 data_root = 'H:'
 debug = False
 
+
 def dateOffset(instr):
     if instr == 'spmg':
         year = 1990
@@ -35,13 +36,15 @@ def dateOffset(instr):
     
     return dt.date(year, 1, 1)
 
+
 def load_database():
     try:
-        conn = psy.connect("dbname='cross_calibration' user='zwerginz' host='10.0.1.65'")
+        conn = psy.connect("dbname=cross_calibration user=zwerginz host=192.168.86.137")
     except:
         print ("I am unable to connect to the database")
         return
     return conn
+
 
 def load_local_cc_data():
     """Loads the pickle files in the same directory to lists."""
@@ -67,12 +70,14 @@ def load_local_cc_data():
             instrumentPairs[pair] = pickle.load(f)
 
     return instrumentPairs
+
+
 def download_cc_data(i1, i2, n, tol1, tol2):
     conn = load_database()
     cur = conn.cursor("server_side")
     fetchlimit = 10000000
 
-    instrumentKey = {'512': 1, 'SPMG': 2, 'MDI': 3, 'HMI': 4}
+    instrumentKey = {'512': 1, 'SPMG': 2, 'MDI': 3, 'HMI': 4, 'SIM': 5, 'SIM2': 6}
     
     result = {}
     points = [0]
@@ -111,6 +116,7 @@ def download_cc_data(i1, i2, n, tol1, tol2):
 
     return result
 
+
 def date_defaults(instr):
     if instr == '512':
         return dt.datetime(1976, 1, 5), dt.datetime(1993, 4, 9)
@@ -122,6 +128,7 @@ def date_defaults(instr):
         return dt.datetime(2010, 4, 8), dt.datetime(2016, 7, 5)
     else:
         raise ValueError('Unrecognized instrument')
+
 
 def get_header_date(f):
     hdulist = fits.open(f)
@@ -145,9 +152,11 @@ def get_header_date(f):
 def date2md(date, instr):
     return date.toordinal() - dateOffset(instr).toordinal()
 
+
 #Converts an instrument mission date string into a standard date string.
 def md2date(md, instr):
     return dt.datetime.fromordinal(md + dateOffset(instr).toordinal())
+
 
 def CRD_read(date, instr):
     if not isinstance(date, dt.datetime):
@@ -170,6 +179,12 @@ def CRD_read(date, instr):
     mgnt.md = date2md(date, instr)
 
     return mgnt
+
+
+def load_sim(fn):
+    sim_map = np.fromfile(fn, dtype=np.float32).reshape(512, 1024)
+    return np.flipud(sim_map)
+
 
 def search_file(date, instr, auto=True):
     if not isinstance(date, dt.datetime):
@@ -220,6 +235,7 @@ def search_file(date, instr, auto=True):
     else:
         return files
 
+
 def mdi_file_choose(f):
     best = f[-1]    # default to last element
     ival = 0
@@ -249,9 +265,11 @@ def mdi_file_choose(f):
     pdebug("mdi_file_choose - selected: " + best)
     return best
 
+
 def pdebug(str):
     if debug:
         print(str)
+
 
 def diff_rot(m1, m2):
     """Given two CRD objects, differentially rotate image 2 to match image 1
@@ -261,5 +279,8 @@ def diff_rot(m1, m2):
     timeDiff = u.Quantity(
             (m1.im_raw.date - m2.im_raw.date).total_seconds(), 'second')
     rotation = d.diff_rot(timeDiff, m2.lath.v*u.deg, rot_type='snodgrass', frame_time='synodic')
+
+    if np.nanmean(rotation).value > 90:
+        rotation -= 360*u.deg
 
     return rotation

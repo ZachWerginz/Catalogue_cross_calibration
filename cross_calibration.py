@@ -2,19 +2,23 @@
 Provides the functions necessary for analyzing cross calibration
 between instruments.
 """
-import zaw_util as z
-from zaw_coord import CRD
-import quadrangles as quad
-import block_plot as b
 import datetime as dt
-import numpy as np
-import itertools
-from uncertainty import Measurement as M
-import random
 import getopt
+import itertools
+import random
 import sys
-from scipy.interpolate import griddata
+import uncertainty.measurement as mnp
+import numpy as np
 import psycopg2 as psy
+from scipy.interpolate import griddata
+from collections import namedtuple
+import quadrangles as quad
+import util as u
+from coord import CRD
+import astropy.units as units
+import matplotlib.pyplot as plt
+
+Pair = namedtuple('Pair', 'x y')
 
 psy.extensions.register_adapter(np.float32, psy._psycopg.AsIs)
 DEC2FLOAT = psy.extensions.new_type(
@@ -27,37 +31,13 @@ __authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
 __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
 
 
-i1 = None       #Instrument 1
-i2 = None       #Instrument 2
+i1 = None  # Instrument 1
+i2 = None  # Instrument 2
+
 
 def usage():
     print('Usage: cross_calibration.py [-d data-root] [-f instrument 1] [-s instrument 2] [-t tolerance]')
 
-def parse_args():
-    """Sets global variables for scripting purposes."""
-    global i1, i2, date, tol
-
-    try:
-        opts, args = getopt.getopt(
-                sys.argv[1:],
-                "d:f:s:t:", 
-                ["data-root=", "instrument-1=", "instrument-2=", "tol="])
-    except getopt.GetoptError as err:
-        print(err)
-        usage()
-        sys.exit(2)
-
-    for opt, arg in opts:
-        if opt in ("-d", "--data-root"):
-            z.data_root = arg
-        elif opt in ("-f", "--first-instr"):
-            i1 = arg
-        elif opt in ("-s", "--second-instr"):
-            i2 = arg
-        elif opt in ("-t", "--tol"):
-            tol2 = int(arg)
-        else:
-            assert False, "unhandled option"
 
 def process_date(i1, i2, date, timeTolerance=1):
     """Inputs two instruments and returns unique list of dates for a date."""
@@ -67,8 +47,8 @@ def process_date(i1, i2, date, timeTolerance=1):
     #Include loop to include 24 hour time tolerance
     for i in range(0 - timeTolerance, 1 + timeTolerance):
         try:
-            f1 = z.search_file(date + dt.timedelta(i), i1, auto=False)
-            f2 = z.search_file(date, i2, auto=False)
+            f1 = u.search_file(date + dt.timedelta(i), i1, auto=False)
+            f2 = u.search_file(date, i2, auto=False)
             if f1 == f2 and i1 != 'mdi' and i2 != 'mdi':
                 continue
             else:
@@ -84,6 +64,7 @@ def process_date(i1, i2, date, timeTolerance=1):
 
     return result
 
+
 def process_instruments(i1, i2, par):
     """
     Returns a list of valid file combinations.
@@ -96,9 +77,9 @@ def process_instruments(i1, i2, par):
     tol1 = par['t1']
     tol2 = par['t2']
 
-    instrumentKey = {'512': 1, 'SPMG': 2, 'MDI': 3, 'HMI': 4}
+    instrumentKey = {'512': 1, 'SPMG': 2, 'MDI': 3, 'HMI': 4, 'SIM': 5, 'SIM2': 6}
 
-    conn = z.load_database()
+    conn = u.load_database()
     cur = conn.cursor()
     cur.execute("SELECT a.filepath AS f1, b.filepath AS f2 \
             FROM file_time_diff main \
@@ -115,11 +96,11 @@ def process_instruments(i1, i2, par):
 
     return results
 
+
 def coordinate_compare(i1, i2):
     """
-    A function used to compare two instruments longitude stats.
-
-    Initially used for debugging, but now deprecated."""
+    Deprecated
+    """
     filePairs = process_instruments(i1, i2)
     pairInfo = {}
     infoList = []
@@ -154,7 +135,8 @@ def coordinate_compare(i1, i2):
 
     return infoList
 
-def fix_longitude(f1, f2, raw_remap=False):
+
+def fix_longitude(f1, f2, raw_remap=False, downscale=False):
     """
     Will shift the longitude of second magnetogram to match the first.
 
@@ -174,17 +156,18 @@ def fix_longitude(f1, f2, raw_remap=False):
     mgnt1.magnetic_flux()
     mgnt2.magnetic_flux()
     #Apply differential Rotation
-    if mgnt2.im_raw.dimensions[0].value > mgnt1.im_raw.dimensions[0].value:
-        rotation = z.diff_rot(mgnt2, mgnt1)
+    if mgnt2.im_raw.dimensions[0].value > mgnt1.im_raw.dimensions[0].value and not downscale:
+        rotation = u.diff_rot(mgnt2, mgnt1)
         mgnt1.lonhRot = mgnt1.lonh + rotation.value
         interpolate_remap(mgnt2, mgnt1, raw_remap)
         return mgnt2, mgnt1
     else:
-        rotation = z.diff_rot(mgnt1, mgnt2)
+        rotation = u.diff_rot(mgnt1, mgnt2)
         mgnt2.lonhRot = mgnt2.lonh + rotation.value
         interpolate_remap(mgnt1, mgnt2, raw_remap)
         return mgnt1, mgnt2
-    
+
+
 def interpolate_remap(m1, m2, raw=False):
     if raw:
         v2 = m2.im_raw.data.flatten()
@@ -197,9 +180,10 @@ def interpolate_remap(m1, m2, raw=False):
     y1 = m1.lath.v.flatten()
     dim1 = m1.im_raw.dimensions
 
-    latitudeMask = np.where(np.abs(y2) < 50)
-    minimum = max(np.nanmin(x2[latitudeMask]),np.nanmin(x1[latitudeMask]))
-    maximum = min(np.nanmax(x2[latitudeMask]), np.nanmax(x1[latitudeMask]))
+    latitudeMask2 = np.where(np.abs(y2) < 50)
+    latitudeMask1 = np.where(np.abs(y1) < 50)
+    minimum = max(np.nanmin(x2[latitudeMask2]), np.nanmin(x1[latitudeMask1]))
+    maximum = min(np.nanmax(x2[latitudeMask2]), np.nanmax(x1[latitudeMask1]))
 
     ind2 = (np.isfinite(x2) * np.isfinite(y2) * np.isfinite(v2) * (x2 > minimum) * (x2 < maximum))
     ind1 = (np.isfinite(x1) * np.isfinite(y1) * (x1 > minimum) * (x1 < maximum))
@@ -208,9 +192,10 @@ def interpolate_remap(m1, m2, raw=False):
     new_m2 = np.full((int(dim1[0].value), int(dim1[1].value)), np.nan)
 
     new_m2.ravel()[ind1] = interp_data
-    new_m2[m2.rg > m2.rsun*np.sin(75.0*np.pi/180)] = np.nan
+    new_m2[m1.rg > m1.par['rsun']*np.sin(75.0*np.pi/180)] = np.nan
 
     m2.remap = new_m2
+
 
 def run_multiple_n(m):
     """Takes mgnt and returns list of different fragmented quadrangles."""
@@ -223,31 +208,55 @@ def run_multiple_n(m):
         n_dict_length[n] = len(N)
     return n_dict_length
 
-def upload_quadrangles(conn, b, workingFiles):
-    f1, f2 = get_file_id(conn, workingFiles)
-    cur = conn.cursor()
-    try:
-        for quad in b:
-            if np.isnan(quad.fluxDensity) or np.isnan(quad.fluxDensity2):
-                continue
-            cur.execute("INSERT INTO quadrangle\
-                (referencemag, secondarymag, diskangle, area,\
-                referencefluxdensity, secondaryfluxdensity, fragmentationvalue)\
-                VALUES\
-                (%s, %s, %s, %s, %s, %s, %s)",
-                (f1, f2, np.float32(quad.diskAngle.v), quad.area.v,
-                quad.fluxDensity, quad.fluxDensity2, quad.fragmentationValue))
 
-        cur.execute("INSERT INTO uniquepairs\
-                VALUES (%s, %s, %s)", (f1, f2, quad.fragmentationValue))
-    except:
-        print("Could not upload completely to database.")
-        conn.rollback()
-        cur.close()
-        return
+def upload_quadrangles(conn, b, workingFiles, sim=False):
+    f1, f2 = get_file_id(conn, workingFiles)
+    print(f1, f2)
+    cur = conn.cursor()
+    if sim:
+        try:
+            for quad in b:
+                if np.isnan(quad.fluxDensity) or np.isnan(quad.fluxDensity2):
+                    continue
+                cur.execute("INSERT INTO quadrangle\
+                    (referencemag, secondarymag, diskangle, area,\
+                    referencefluxdensity, secondaryfluxdensity, fragmentationvalue)\
+                    VALUES\
+                    (%s, %s, %s, %s, %s, %s, %s)",
+                    (f1, f2, quad.diskAngle, quad.area,
+                    quad.fluxDensity, quad.fluxDensity2, quad.fragmentationValue))
+
+            cur.execute("INSERT INTO uniquepairs\
+                    VALUES (%s, %s, %s)", (f1, f2, quad.fragmentationValue))
+        except Exception as e:
+            print("Could not upload completely to database.")
+            conn.rollback()
+            cur.close()
+            return
+    else:
+        try:
+            for quad in b:
+                if np.isnan(quad.fluxDensity) or np.isnan(quad.fluxDensity2):
+                    continue
+                cur.execute("INSERT INTO quadrangle\
+                    (referencemag, secondarymag, diskangle, area,\
+                    referencefluxdensity, secondaryfluxdensity, fragmentationvalue)\
+                    VALUES\
+                    (%s, %s, %s, %s, %s, %s, %s)",
+                    (f1, f2, np.float32(quad.diskAngle.v), quad.area.v,
+                    quad.fluxDensity, quad.fluxDensity2, quad.fragmentationValue))
+
+            cur.execute("INSERT INTO uniquepairs\
+                    VALUES (%s, %s, %s)", (f1, f2, quad.fragmentationValue))
+        except Exception as e:
+            print("Could not upload completely to database.")
+            conn.rollback()
+            cur.close()
+            return
        
     conn.commit()
     cur.close()
+
 
 def compare_day(i1, i2, par, filePair):
     """
@@ -269,10 +278,12 @@ def compare_day(i1, i2, par, filePair):
 
     return blocks_n
 
+
 def get_instruments():
     global i1, i2
     i1 = input("Enter an instrument: ")
     i2 = input("Enter a second instrument: ")
+
 
 def get_file_id(conn, files):
     cur = conn.cursor()
@@ -284,31 +295,60 @@ def get_file_id(conn, files):
 
     return fileID1, fileID2
 
+
+def sim_compare(fn1, fn2, rotate=0):
+    class MockCRD:
+        def __init__(self, filename):
+            class Im:
+                pass
+            self.im_raw = Im()
+            self.im_raw.data = u.load_sim(filename)
+            self.im_raw.dimensions = Pair(*self.im_raw.data.shape*units.pixel)
+            self.im_raw.instrument = 'SIM'
+            self.im_raw.date = dt.datetime.strptime((filename.split('.')[0].split('\\')[-1] + filename.split('.')[1]), '%Y%m%d%H')
+            self.im_corr = mnp.Measurement(self.im_raw.data, self.im_raw.data*0)
+            lat_space = np.linspace(90, -90, self.im_raw.data.shape[0] + 2)
+            lon_space = np.linspace(-180, 180, self.im_raw.data.shape[1] + 2)
+            self.lath, self.lonh = np.meshgrid(lat_space[1:-1], lon_space[1:-1], indexing='ij')
+            self.lath = mnp.Measurement(self.lath, np.zeros(self.lath.shape))
+            self.lonh = mnp.Measurement(self.lonh, np.zeros(self.lonh.shape))
+            self.rg = np.array(self.im_raw.data, copy=True)
+            self.rg[:] = np.nan
+            self.area = np.array(self.im_raw.data, copy=True)
+            self.area[:] = np.nan
+            self.par = {'rsun': 960}
+
+    sim1 = MockCRD(fn1)
+    sim2 = MockCRD(fn2)
+    rotation = u.diff_rot(sim2, sim1)
+    sim2.lonhRot = sim1.lonh + rotation.value
+    interpolate_remap(sim1, sim2, False)
+    sim2.remap = sim2.im_raw.data
+
+    return sim1, sim2
+
+
 def main():
     """
-    Main loop guiding the user though different cross_calibration
-    visualization options. For each magnetogram pair chosen, the
-    list of quadrangles and their parameters will be added to 
-    bl and p respectively.
+    Main loop guiding the user though different cross calibration processing options.
+    For each magnetogram pair chosen, the list of quadrangles and their parameters will be uploaded to the SQL database.
 
     --Options--
-    r [num]:    will choose a random magnetogram num times out of the 
-                instrument overlap
-    s:          user can choose specific date pair
+    r [num]:    will choose a random magnetogram num times out of the instrument overlap
+    rsim [num]: will choose a random simulated magnetogram (num) amount of times out of the instrument overlap
+    rs [num]:   chooses unique days instead of pairs for random processing
     i:          allows user to switch instruments
-    h:          will plot all of the p data held thus filePairs
-    e:          exit the program, or return bl and p data if in python.
+    e:          exit the loop
     """
-    parse_args()
     if i1 is None or i2 is None:
         get_instruments()
-    conn = z.load_database()
+    conn = u.load_database()
 
     while True:
         option = input("Choose a function: (r)andom [num], (s)elect date, switch (i)nstruments, (e)xit: ")
-        if option=='i':
+        if option == 'i':
             get_instruments()
-        elif 'r' in option:
+        elif 'rsim' in option:
             try:
                 passes = int(option.split()[-1])
             except ValueError:
@@ -318,25 +358,27 @@ def main():
             tol2 = input("Enter maximum time: ")
             params = {'n': n, 't1': tol1, 't2': tol2}
             fileMatches = process_instruments(i1, i2, params)
-            for i in range(min(len(fileMatches),passes)):
+            for i in range(min(len(fileMatches), passes)):
                 try:
-                    choiceInt = int(random.random()*len(fileMatches))
+                    choiceInt = int(random.random() * len(fileMatches))
                     workingFiles = fileMatches[choiceInt]
                     fileIDs = get_file_id(conn, workingFiles)
                     cur = conn.cursor()
                     cur.execute("SELECT * FROM uniquepairs\
-                            WHERE referencemag = %s \
-                            AND secondarymag = %s\
-                            AND fragmentationvalue = %s", (fileIDs[0], fileIDs[1], n))
+                             WHERE referencemag = %s \
+                             AND secondarymag = %s\
+                             AND fragmentationvalue = %s", (fileIDs[0], fileIDs[1], n))
                     if cur.fetchone() is not None:
                         cur.close()
                         continue
                     cur.close()
-                    b = compare_day(i1, i2, params, workingFiles)
-                    del fileMatches[choiceInt] #So we don't hit it again
+                    sim1, sim2 = sim_compare(workingFiles[0], workingFiles[1])
+                    b = quad.fragment_multiple(sim1, sim2, params['n'])
+                    del fileMatches[choiceInt]  # So we don't hit it again
                 except ValueError:
                     continue
-                upload_quadrangles(conn, b, workingFiles)
+                upload_quadrangles(conn, b, workingFiles, sim=True)
+
         elif 'rs' in option:
             """Special option for only selecting unique days, not pairs"""
             try:
@@ -374,9 +416,46 @@ def main():
                     continue
                 upload_quadrangles(conn, b, workingFiles)
                 i += 1
+
+        elif 'r' in option:
+            print('Random fetch')
+            try:
+                passes = int(option.split()[-1])
+            except ValueError:
+                passes = 1
+            n = int(input("Enter segmentation level: "))
+            tol1 = input("Enter minimum time: ")
+            tol2 = input("Enter maximum time: ")
+            params = {'n': n, 't1': tol1, 't2': tol2}
+            fileMatches = process_instruments(i1, i2, params)
+            i = 0
+            while True:
+                if i > passes:
+                    break
+                try:
+                    choiceInt = int(random.random()*len(fileMatches))
+                    workingFiles = fileMatches[choiceInt]
+                    fileIDs = get_file_id(conn, workingFiles)
+                    cur = conn.cursor()
+                    cur.execute("SELECT * FROM uniquepairs\
+                            WHERE referencemag = %s \
+                            AND secondarymag = %s\
+                            AND fragmentationvalue = %s", (fileIDs[0], fileIDs[1], n))
+                    if cur.fetchone() is not None:
+                        cur.close()
+                        continue
+                    cur.close()
+                    b = compare_day(i1, i2, params, workingFiles)
+                    del fileMatches[choiceInt] #So we don't hit it again
+                except ValueError:
+                    continue
+                upload_quadrangles(conn, b, workingFiles)
+                i += 1
+
         elif 'e' in option:
             break
     return
+
 
 if __name__ == "__main__":
     main()

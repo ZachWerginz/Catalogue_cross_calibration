@@ -5,16 +5,10 @@ import matplotlib.colors as colors
 import matplotlib.cm as cm
 import matplotlib.lines as mlines
 import matplotlib
-import copy
-import itertools
 from scipy.optimize import curve_fit
 from scipy.stats import gaussian_kde
 import scipy
-import scipy.interpolate as interpolate
-from scipy.odr import *
-from itertools import cycle, islice
-from mpl_toolkits.axes_grid1 import AxesGrid
-import random
+from itertools import cycle
 import quadrangles as quad
 from matplotlib.ticker import MaxNLocator
 
@@ -23,9 +17,11 @@ __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
 
 matplotlib.rcParams.update({'font.size': 22})
 
+
 def add_identity(axes, *line_args, **line_kwargs):
     """Plots the identity line on the specified axis."""
     identity, = axes.plot([], [], *line_args, **line_kwargs)
+
     def callback(axes):
         low_x, high_x = axes.get_xlim()
         low_y, high_y = axes.get_ylim()
@@ -36,26 +32,34 @@ def add_identity(axes, *line_args, **line_kwargs):
     axes.callbacks.connect('xlim_changed', callback)
     axes.callbacks.connect('ylim_changed', callback)
 
+
 def power_law(x, a, b, c):
     return (a*(x**b)) + c
+
 
 def power_func(p, x, y):
     return (p[0]*(x**p[1])) - y
 
+
 def power_func_intercept(p, x, y):
     return (p[0]*(x**p[1])) + p[2] - y
+
 
 def linear_law(x, a, b):
     return a*x + b
 
+
 def linear_func(p, x, y):
     return (p*x) - y
+
 
 def gaussian(x, A, sigma, mu):
     return A/(np.sqrt(2*np.pi)*sigma)*np.exp(-(x-mu)**2/(2.*sigma**2))
 
+
 def gaussian_func(p, x, y):
     return p[0]/(np.sqrt(2*np.pi)*p[1])*np.exp(-(x-p[2])**2/(2.*p[1]**2)) - y
+
 
 def fit_xy(x, y, fitType='power'):
     ind = (np.isfinite(x) & np.isfinite(y))
@@ -70,10 +74,10 @@ def fit_xy(x, y, fitType='power'):
                         bounds=([0,0,0], [np.inf, np.inf,np.inf]), 
                         ftol=1e-3, xtol=1e-3, gtol=1e-3, x_scale='jac', 
                         jac='3-point', loss='soft_l1', f_scale=.5)
-    elif fitType=='linear':
+    else:
         popt = scipy.optimize.least_squares(linear_func, [1],
                         args=(x[ind], y[ind]), loss='huber', f_scale=.1)
-    #---------------Acquire fit uncertainties-----------------------------------
+    # ---------------Acquire fit uncertainties-----------------------------------
     _, s, VT = np.linalg.svd(popt.jac, full_matrices=False)
     threshold = np.finfo(float).eps * max(popt.jac.shape) * s[0]
     s = s[s > threshold]
@@ -81,7 +85,7 @@ def fit_xy(x, y, fitType='power'):
     pcov = np.dot(VT.T / s**2, VT)
     stderr = np.sqrt(np.diag(pcov))
 
-    #--------------Return appropriate parameters--------------------------------
+    # --------------Return appropriate parameters--------------------------------
     if fitType=='power':
         return {'a': popt.x[0], 'aUnc': stderr[0], 
                 'b': popt.x[1], 'bUnc': stderr[1],
@@ -91,8 +95,9 @@ def fit_xy(x, y, fitType='power'):
                 'b': popt.x[1], 'bUnc': stderr[1], 
                 'c': popt.x[2], 'cUnc': stderr[2],
                 'n': len(x), 'res': np.sum(popt.fun/y[ind])}
-    elif fitType=='linear':
+    else:
         return {'a': popt.x[0], 'aUnc': stderr[0], 'n': len(x), 'res': np.sum(popt.fun/y[ind])}
+
 
 def plot_fits(a, b, c=5, fitType='power', ax=None, **kwargs):
     def callback(axes):
@@ -112,25 +117,34 @@ def plot_fits(a, b, c=5, fitType='power', ax=None, **kwargs):
     ax.callbacks.connect('xlim_changed', callback)
     ax.callbacks.connect('ylim_changed', callback)
 
+
 def hist_axis(bl, diskLimits=[0,90], **kwargs):
     """Returned parameters for multiple histograms."""
     b = kwargs.pop('binCount', 100)
     constant = kwargs.pop('const', 'width')
-
-    y, x, da = quad.extract_valid_points(bl)
+    axes_swap = kwargs.pop('axes_swap', False)
+    if axes_swap:
+        x, y, da = quad.extract_valid_points(bl)
+    else:
+        y, x, da = quad.extract_valid_points(bl)
 
     minimum = np.nanmin(x)
     maximum = np.nanmax(x)
-    ind = np.where(np.logical_and(
-            np.logical_and(np.isfinite(x), np.isfinite(y)),
-            np.logical_and(da > diskLimits[0], da < diskLimits[1])
+    if diskLimits is not None:
+        ind = np.where(np.logical_and(
+                np.logical_and(np.isfinite(x), np.isfinite(y)),
+                np.logical_and(da > diskLimits[0], da < diskLimits[1])
+                )
             )
-        )
-    x = x[ind]
-    y = y[ind]
+        x = x[ind]
+        y = y[ind]
+    else:
+        ind = np.where(np.logical_and(np.isfinite(x), np.isfinite(y)))
+        x = x[ind]
+        y = y[ind]
     histList = []
 
-    #Split by constant bin width
+    # Split by constant bin width
     if constant == 'width':
         xedges = np.linspace(minimum, maximum, b)
         for i in range(1, xedges.shape[0] - 1):
@@ -140,7 +154,7 @@ def hist_axis(bl, diskLimits=[0,90], **kwargs):
             if len(inds[0]) < 20: continue
             sliceMed = (xedges[i] + xedges[i-1]) / 2
             histList.append(get_hist_info(y[inds], xedges, sliceMed))
-    #Split by constant bin count
+    # Split by constant bin count
     else: 
         sortInd = np.argsort(x)
         y = y[sortInd]
@@ -154,6 +168,7 @@ def hist_axis(bl, diskLimits=[0,90], **kwargs):
 
     return histList, x, y
 
+
 def get_hist_info(data, b, sM):
     """Deprecated. For use with hist_axis in getting histogram data."""
     med = np.median(data)
@@ -161,6 +176,7 @@ def get_hist_info(data, b, sM):
     std = np.std(data)
     return {'med': med, 'mea': mea, 'std': std, 'data': data,
             'b': b, 'sliceMed': sM}
+
 
 def scatter_plot(dict1, dict2, separate=False):
     """Plots different blocked n values. Deprecated."""
@@ -177,104 +193,111 @@ def scatter_plot(dict1, dict2, separate=False):
         i += 1
     plt.show()
 
-def box_plot(bl, dL, ax, clr='blue', **kwargs):
+
+def box_plot(bl, dL, ax, clr='blue', corrections=False, **kwargs):
     """Creates a box plot and sets properties."""
     hl, x, y = hist_axis(bl, dL, **kwargs)
-    totalKernel = gaussian_kde(y)
-    xspace = np.linspace(np.nanmin(x), np.nanmax(x), 1000)
-    totalKernelArray = totalKernel.evaluate(xspace)
-
-    gaussianMeans = []
-    gaussianStds = []
-    for bin in hl:
-        binKernel = gaussian_kde(bin['data'])
-        binKernelArray = binKernel.evaluate(xspace)
-        D = binKernelArray/np.sqrt(totalKernelArray)
-        maxInd = np.argmax(binKernelArray)
-        indValid = ((D < D[maxInd]))
-        try:
-            popt, pcov = curve_fit(gaussian, xspace[indValid], 
-                D[indValid], 
-                p0=[np.abs(bin['sliceMed']), np.abs(bin['sliceMed']/5), bin['sliceMed']], 
-                maxfev=10000)
-        except:
-            popt = np.array([np.nan, np.nan, np.nan])
-        gaussianMeans.append(popt[2])
-        gaussianStds.append(popt[1])
+    y2 = np.array([t['med'] for t in hl])
+    x2 = np.array([s['sliceMed'] for s in hl])
+    lim = max(np.max(np.abs(x2)), np.max(np.abs(y2)))*1.1
+    box_list = [s['data'] for s in hl]
+    box_widths = .4*(max(x2) - min(x2))/len(y2)
+    box = ax.boxplot(box_list, widths=box_widths, positions=x2, manage_xticks=False,
+                     whis=0, sym="", showcaps=False, patch_artist=True)
 
 
-    y = np.array([x['med'] for x in hl])
-    x = [s['sliceMed'] for s in hl]
-    boxList = [s['data'] for s in hl]
-    lim = max(abs(x[0]*1.10), abs(x[-1]*1.10))
-    boxWidths = .4*(max(x) - min(x))/len(y)
-    box = ax.boxplot(boxList, widths=boxWidths, positions=x, manage_xticks=False,
-            whis=[10, 90], sym="", showcaps=False, showmeans=True,
-            whiskerprops=dict(linestyle='-', color=clr), patch_artist=True)
-    #ax.plot(x, gaussianMeans, color='black', linestyle='None', marker='.', ms=15, alpha=.6)
-    
     ax.set_xlim(-lim, lim)
-    ax.set(aspect='equal')
-    add_identity(ax, color='.3', ls='--', zorder=1)
-
-    for std, mean, xPos in zip(gaussianStds, gaussianMeans, x):
-        ax.plot([xPos, xPos], [mean+std, mean-std], 'k-', alpha=.6)
+    ax.set_ylim(-lim, lim)
+    ax.set(adjustable='box-forced', aspect='equal')
+    add_identity(ax, color='.3', ls='-', linewidth=2, zorder=1)
 
     for bx in box['boxes']:
         bx.set(edgecolor=clr, facecolor=clr, alpha=.75)
 
+    if corrections:
+        total_kernel = gaussian_kde(y)
+        xspace = np.linspace(np.nanmin(x), np.nanmax(x), 1000)
+        total_kernel_array = total_kernel.evaluate(xspace)
+        gaussian_means = []
+        gaussian_stds = []
+        for bin in hl:
+            bin_kernel = gaussian_kde(bin['data'])
+            bin_kernel_array = bin_kernel.evaluate(xspace)
+            divided_dist = bin_kernel_array/np.sqrt(total_kernel_array)
+            max_ind = np.argmax(bin_kernel_array)
+            ind_valid = (divided_dist < 1e10)
+            # ind_valid = (divided_dist < divided_dist[max_ind])
+            try:
+                popt = scipy.optimize.least_squares(gaussian_func,
+                                                    [np.abs(bin['sliceMed']), np.abs(bin['sliceMed'] / 5),
+                                                     bin['sliceMed']],
+                                                    args=(xspace[ind_valid], divided_dist[ind_valid]),
+                                                    jac='3-point', x_scale='jac', loss='soft_l1', f_scale=.1).x
+                # popt, pcov = curve_fit(gaussian, xspace[ind_valid], divided_dist[ind_valid],
+                #     p0=[np.abs(bin['sliceMed']), np.abs(bin['sliceMed']/5), bin['sliceMed']], maxfev=10000)
+            except:
+                popt = np.array([np.nan, np.nan, np.nan])
+            gaussian_means.append(popt[2])
+            gaussian_stds.append(popt[1])
+        ax.plot(x2, gaussian_means, color='black', linestyle='None', marker='.', ms=15, alpha=.6, zorder=10)
+        for std, mean, x_pos in zip(gaussian_stds, gaussian_means, x2):
+            ax.plot([x_pos, x_pos], [mean + std, mean - std], 'k-', alpha=.6, zorder=10)
+
     return hl
 
-def box_grid(bl, diskCuts=[0, 30, 45, 70], **kwargs):
+
+def box_grid(bl, diskCuts=[0, 30, 45, 70], show_fits=True, **kwargs):
     """Splits box plots into sections of degrees from disk center."""
 
     i1 = bl['i1']
     i2 = bl['i2']
-    tDiff = str(round(bl['timeDifference'].total_seconds()/3600, 1)) + ' hours'
-    diskCutData = []
-    f, grid = plt.subplots(1, len(diskCuts) - 1, sharey=True, figsize=(24, 13))
-    f.subplots_adjust(left=.05, right=.94, bottom=.20, top=.75, wspace=0)
+    t_diff = str(round(bl['timeDifference'].total_seconds()/3600, 1)) + ' hours'
+    disk_cut_data = []
+    f, grid = plt.subplots(1, len(diskCuts) - 1, figsize=(18, 9))
+    f.subplots_adjust(wspace=0)
     colors = [(80/255, 60/255, 0), (81/255, 178/255, 76/255), (114/255, 178/255, 229/255)]
-    #-----------------------------Extract box data------------------------------
+    # -----------------------------Extract box data------------------------------
     for i in range(len(diskCuts)-1):
-        diskCutData.append(box_plot(bl, diskCuts[i:i+2], grid[i], clr=colors[i], **kwargs))
-        diskCutData[i][0]['c'] = colors[i]
+        disk_cut_data.append(box_plot(bl, diskCuts[i:i+2], grid[i], clr=colors[i], **kwargs))
+        disk_cut_data[i][0]['c'] = colors[i]
 
-    #--------------------------Setting plot parameters--------------------------
-    maxField = max([s['med'] for hl in diskCutData for s in hl])
-    grid[0].set_ylim(-maxField, maxField)
-
+    # --------------------------Setting plot parameters--------------------------
+    max_field = np.max([np.max(np.abs(xy)) for ax in grid for xy in (ax.get_ylim(), ax.get_xlim())])
     for plot in grid:
-        plot.set_xlim(grid[0].get_ylim())
+        plot.set_xlim(-max_field, max_field)
+        plot.set_ylim(-max_field, max_field)
 
     grid[1].xaxis.set_ticks_position('top')
-    grid[0].set_ylabel(i1 + ' Field (G)', labelpad=-.75)
-    grid[2].set_ylabel(i1 + ' Field (G)', labelpad=25, rotation=270)
+    grid[0].set_ylabel(
+        r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
+        labelpad=-.75)
+    grid[-1].set_ylabel(
+        r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
+        labelpad=25, rotation=270)
+    grid[1].get_yaxis().set_ticks([])
     grid[2].yaxis.set_ticks_position('right')
     grid[2].yaxis.set_label_position('right')
-    f.text(.45, .17, i2 + ' Field (G)')
-    fig_title = "Time Difference Between Magnetograms: " + tDiff + \
-        '\n' + 'n = ' + str(bl['n'])
+    f.text(.5, .17, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i2.upper()),
+           horizontalalignment='center')
+    fig_title = "Time Difference Between Magnetograms: " + t_diff  # + \
+    # '\n' + 'n = ' + str(bl['n'])
     f.suptitle(fig_title, y=.85, fontsize=30, fontweight='bold')
 
-    lines = ["-","--", ":"]
-    linecycler = cycle(lines)
-    colorcycler = cycle(colors)
-    fitParameters = []
-
-    for h in diskCutData:
-        fitParameters.append(fit_xy(
-            np.abs(np.array([s['sliceMed'] for s in h])), 
-            np.abs(np.array([s['med'] for s in h])),
-            'power'))
-
-    for g in grid:
-        for p in fitParameters:
-            plot_fits(p['a'], p['b'], ax=g, color=next(colorcycler),
-                linewidth=3, linestyle=next(linecycler), zorder=1)
+    if show_fits:
+        lines = ["-", "--", ":"]
+        linecycler = cycle(lines)
+        colorcycler = cycle(colors)
+        fit_parameters = []
+        for h in disk_cut_data:
+            fit_parameters.append(fit_xy(np.abs(np.array([s['sliceMed'] for s in h])),
+                                         np.abs(np.array([s['med'] for s in h])), 'power'))
+        for g in grid:
+            for p in fit_parameters:
+                plot_fits(p['a'], p['b'], ax=g, color=next(colorcycler), linewidth=3, linestyle=next(linecycler),
+                          zorder=1)
 
     add_box_legend(grid, diskCuts)
-    #f.savefig('pict.png', bbox_inches='tight', pad_inches = 0.1)
+
 
 def corrected_box_plot(bl, dL, ax, clr='blue', **kwargs):
     """Creates a box plot and sets properties."""
@@ -328,6 +351,7 @@ def corrected_box_plot(bl, dL, ax, clr='blue', **kwargs):
 
     return hl
 
+
 def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, **kwargs):
     """Splits box plots into sections of degrees from disk center."""
 
@@ -337,7 +361,7 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, **kwar
     i2 = bl['i2']
     l = len(diskCuts) - 1
     tDiff = str(round(bl['timeDifference'].total_seconds()/3600, 1)) + ' hours'
-    #-----------------------------Extract box data------------------------------
+    # -----------------------------Extract box data------------------------------
     if l == 3:
         f, grid = plt.subplots(1, 3, sharey=True, figsize=(24, 13))
         f.subplots_adjust(left=.05, right=.94, bottom=.20, top=.75, wspace=0)
@@ -346,12 +370,12 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, **kwar
     elif l == 5:
         f, grid = create_5_plots()
         
-    colors =   [(80/255, 60/255, 0), 
-                (81/255, 178/255, 76/255),
-                (114/255, 178/255, 229/255),
-                (111/255, 40/255, 124/255),
-                (255/255, 208/255, 171/255)]
-    #-----------------------------Extract box data------------------------------
+    colors = [(80/255, 60/255, 0),
+              (81/255, 178/255, 76/255),
+              (114/255, 178/255, 229/255),
+              (111/255, 40/255, 124/255),
+              (255/255, 208/255, 171/255)]
+    # -----------------------------Extract box data------------------------------
     if fullSectorData is None:
         diskCutData = []
         for i in range(l):
@@ -359,7 +383,7 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, **kwar
             diskCutData[i][0]['c'] = colors[i]
     else:
         diskCutData = fullSectorData
-    #--------------------------Setting plot parameters--------------------------
+    # --------------------------Setting plot parameters--------------------------
     
     if l == 3:
         lim = nLims[str(bl['n'])]
@@ -425,6 +449,122 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, **kwar
 
     return diskCutData
 
+
+def violin_plot(bl, dL, ax, clr='blue', alpha=.75, percentiles=[25, 75], corrections=False, **kwargs):
+    """Creates a box plot and sets properties."""
+    hl, x, y = hist_axis(bl, dL, **kwargs)
+    y2 = np.array([t['med'] for t in hl])
+    x2 = np.array([s['sliceMed'] for s in hl])
+    ind = ((y2 > 0) & (x2 > 0)) | ((y2 < 0) & (x2 < 0))
+    y2 = y2[ind]
+    x2 = x2[ind]
+    lim = max(np.max(np.abs(x2)), np.max(np.abs(y2)))*1.1
+    dataset = [s['data'] for s in hl]
+    p_data = [np.percentile(s, percentiles) for s in dataset]
+    refined_dataset = [x[((x > p[0]) & (x < p[1]))] for x, p in zip(dataset, p_data)]
+    violin_widths = .6*(max(x2) - min(x2))/len(y2)
+
+    violins = ax.violinplot(refined_dataset, widths=violin_widths, showmedians=True, showextrema=False, positions=x2)
+
+    ax.set_xlim(-lim, lim)
+    ax.set_ylim(-lim, lim)
+    ax.set(adjustable='box-forced', aspect='equal')
+    add_identity(ax, color='.3', ls='-', linewidth=2, zorder=1)
+
+    for vio in violins['bodies']:
+        vio.set(facecolor=clr, alpha=alpha)
+
+    violins['cmedians'].set(edgecolor='red')
+    violins['cmedians'].set_linewidth(2.5)
+
+    if corrections:
+        total_kernel = gaussian_kde(y)
+        xspace = np.linspace(np.nanmin(x), np.nanmax(x), 1000)
+        total_kernel_array = total_kernel.evaluate(xspace)
+        gaussian_means = []
+        gaussian_stds = []
+        for bin in hl:
+            bin_kernel = gaussian_kde(bin['data'])
+            bin_kernel_array = bin_kernel.evaluate(xspace)
+            divided_dist = bin_kernel_array/np.sqrt(total_kernel_array)
+            max_ind = np.argmax(bin_kernel_array)
+            ind_valid = (divided_dist < 1e10)
+            # ind_valid = (divided_dist < divided_dist[max_ind])
+            try:
+                popt = scipy.optimize.least_squares(gaussian_func,
+                                                    [np.abs(bin['sliceMed']), np.abs(bin['sliceMed'] / 5),
+                                                     bin['sliceMed']],
+                                                    args=(xspace[ind_valid], divided_dist[ind_valid]),
+                                                    jac='3-point', x_scale='jac', loss='soft_l1', f_scale=.1).x
+                # popt, pcov = curve_fit(gaussian, xspace[ind_valid], divided_dist[ind_valid],
+                #     p0=[np.abs(bin['sliceMed']), np.abs(bin['sliceMed']/5), bin['sliceMed']], maxfev=10000)
+            except:
+                popt = np.array([np.nan, np.nan, np.nan])
+            gaussian_means.append(popt[2])
+            gaussian_stds.append(popt[1])
+        ax.plot(x2, gaussian_means, color='black', linestyle='None', marker='.', ms=15, alpha=.6, zorder=10)
+        for std, mean, x_pos in zip(gaussian_stds, gaussian_means, x2):
+            ax.plot([x_pos, x_pos], [mean + std, mean - std], 'k-', alpha=.6, zorder=10)
+
+    return hl
+
+
+def violin_grid(bl, diskCuts=[0, 30, 45, 70], show_fits=True, **kwargs):
+    """Splits box plots into sections of degrees from disk center."""
+
+    i1 = bl['i1']
+    i2 = bl['i2']
+    t_diff = str(round(bl['timeDifference'].total_seconds()/3600, 1)) + ' hours'
+    disk_cut_data = []
+    f, grid = plt.subplots(1, len(diskCuts) - 1, figsize=(18, 9))
+    f.subplots_adjust(wspace=0)
+    colors = [(80/255, 60/255, 0), (81/255, 178/255, 76/255), (114/255, 178/255, 229/255)]
+    # -----------------------------Extract box data------------------------------
+    for i in range(len(diskCuts)-1):
+        disk_cut_data.append(
+            violin_plot(bl, diskCuts[i:i + 2], grid[i], alpha=.4, percentiles=[0, 100], clr=colors[i], **kwargs))
+        disk_cut_data.append(violin_plot(bl, diskCuts[i:i + 2], grid[i], alpha=.5, percentiles=[25, 75], clr=colors[i], **kwargs))
+        disk_cut_data.append(violin_plot(bl, diskCuts[i:i + 2], grid[i], alpha=.75, percentiles=[37.5, 62.5], clr=colors[i], **kwargs))
+        disk_cut_data[i][0]['c'] = colors[i]
+
+    # --------------------------Setting plot parameters--------------------------
+    max_field = np.max([np.max(np.abs(xy)) for ax in grid for xy in (ax.get_ylim(), ax.get_xlim())])
+    for plot in grid:
+        plot.set_xlim(-max_field, max_field)
+        plot.set_ylim(-max_field, max_field)
+
+    grid[1].xaxis.set_ticks_position('top')
+    grid[0].set_ylabel(
+        r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
+        labelpad=-.75)
+    grid[-1].set_ylabel(
+        r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
+        labelpad=25, rotation=270)
+    grid[1].get_yaxis().set_ticks([])
+    grid[2].yaxis.set_ticks_position('right')
+    grid[2].yaxis.set_label_position('right')
+    f.text(.5, .17, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i2.upper()),
+           horizontalalignment='center')
+    fig_title = "Time Difference Between Magnetograms: " + t_diff  # + \
+    # '\n' + 'n = ' + str(bl['n'])
+    f.suptitle(fig_title, y=.85, fontsize=30, fontweight='bold')
+
+    if show_fits:
+        lines = ["-", "--", ":"]
+        linecycler = cycle(lines)
+        colorcycler = cycle(colors)
+        fit_parameters = []
+        for h in disk_cut_data:
+            fit_parameters.append(fit_xy(np.abs(np.array([s['sliceMed'] for s in h])),
+                                         np.abs(np.array([s['med'] for s in h])), 'power'))
+        for g in grid:
+            for p in fit_parameters:
+                plot_fits(p['a'], p['b'], ax=g, color=next(colorcycler), linewidth=3, linestyle=next(linecycler),
+                          zorder=1)
+
+    add_box_legend(grid, diskCuts)
+
+
 def variance_grid(bl, fullSectorData=None, diskCuts=[0, 20, 45, 90], **kwargs):
     #----------Initialize Tex and data if not passed----------------------------
     plt.rc('text', usetex=True)
@@ -476,6 +616,7 @@ def variance_grid(bl, fullSectorData=None, diskCuts=[0, 20, 45, 90], **kwargs):
     add_box_legend(grid, diskCuts)
     return fitParameters
 
+
 def extract_fitting_data(iP):
     """Takes the completed box and raw data and extracts fitting parameters."""
     n = []
@@ -519,6 +660,7 @@ def extract_fitting_data(iP):
 
     return dfA, dfB, dfC
 
+
 def plot_variance_ns(data):
     d = data
     dt = [1, 3, 12, 24, 36, 48]
@@ -546,6 +688,7 @@ def plot_variance_ns(data):
         plt.legend()
     print(res_sums)
     plt.show()
+
 
 def plot_variance_coefficients(df, coeff='a', yAxis='center', xAxis='n', zAxis='tDiff', i1='mdi', i2='mdi'):
     """Takes a dataframe containing fit coefficients for variance grids and
@@ -593,6 +736,7 @@ def plot_variance_coefficients(df, coeff='a', yAxis='center', xAxis='n', zAxis='
     ax2.set_xlabel('{0}'.format(zAxis))
     plt.legend(loc=4)
 
+
 def add_box_legend(axes, cuts):
     """
     Takes in a set of mpl axes and adds a legend depicting disk location."""
@@ -607,6 +751,7 @@ def add_box_legend(axes, cuts):
                 color=colors[i],
                 label=r'${:d}^{{\circ}} - {:d}^{{\circ}}$'.format(cuts[i], cuts[i+1]))],
             frameon=False)
+
 
 def add_equations(axes, fits, fitType = 'power', loc='top'):
     """Formats latex equations for curve fitting and displays them on plots."""
@@ -681,6 +826,7 @@ def add_equations(axes, fits, fitType = 'power', loc='top'):
                 xytext=(-5, l), textcoords='offset points',
                 ha='right', va='bottom')
 
+
 def plot_block_parameters(bl, save=False):
     """
     Accepts any number of p-tuples and creates scatter plots.
@@ -699,7 +845,7 @@ def plot_block_parameters(bl, save=False):
     
     y, x, da = quad.extract_valid_points(bl)
 
-    if  not np.sum(np.isfinite(y) & np.isfinite(x)):
+    if not np.sum(np.isfinite(y) & np.isfinite(x)):
         raise ValueError("No suitable points to plot.")
 
     sortedInds = np.argsort(da)
@@ -741,6 +887,7 @@ def plot_block_parameters(bl, save=False):
     f.suptitle(fig_title, y=.95, fontsize=30, fontweight='bold')
 
     return f
+
 
 def plot_coefficients():
     """Deprecated"""
@@ -807,6 +954,7 @@ def plot_coefficients():
 
     return fitParameters
 
+
 def to_matlab(iP):
     d = {}
     for key, pairData in iP.items():
@@ -820,6 +968,7 @@ def to_matlab(iP):
                 d[dict_str] = np.array([medians, stdevs])
             except: continue
     return d
+
 
 def create_5_plots():
     yPad = .12
