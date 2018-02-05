@@ -47,8 +47,8 @@ class Ch512Map(GenericMap):
 
     @property
     def scale(self):
-        return Pair(self.meta['cdelt1'] * self.spatial_units.x / u.pixel * self.meta['CRR_SCLX'],
-                    self.meta['cdelt2'] * self.spatial_units.y / u.pixel * self.meta['CRR_SCLY'])
+        return Pair(self.meta['cdelt1'] * self.spatial_units[0] / u.pixel * self.meta['CRR_SCLX'],
+                    self.meta['cdelt2'] * self.spatial_units[1] / u.pixel * self.meta['CRR_SCLY'])
 
     @property
     def rsun_obs(self):
@@ -112,8 +112,8 @@ class SPMGMap(GenericMap):
 
     @property
     def scale(self):
-        return Pair(self.meta['cdelt1'] * self.spatial_units.x / u.pixel * self.meta['CRR_SCLX'],
-                    self.meta['cdelt2'] * self.spatial_units.y / u.pixel * self.meta['CRR_SCLY'])
+        return Pair(self.meta['cdelt1'] * self.spatial_units[0] / u.pixel * self.meta['CRR_SCLX'],
+                    self.meta['cdelt2'] * self.spatial_units[1] / u.pixel * self.meta['CRR_SCLY'])
 
     @classmethod
     def is_datasource_for(cls, data, header, **kwargs):

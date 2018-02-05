@@ -1,5 +1,5 @@
 from coord import CRD
-from uncertainty.measurement import Measurement as M
+import uncertainty.measurement as mnp
 import numpy as np
 import random
 
@@ -31,33 +31,34 @@ class Quadrangle:
 
 
     def min_latitude(self, m, ind):
-        return M.nanmin(m.lath[ind])
+        return mnp.nanmin(m.lath[ind])
 
     def max_latitude(self, m, ind):
-        return M.nanmax(m.lath[ind])
+        return mnp.nanmax(m.lath[ind])
 
     def min_longitude(self, m, ind):
-        return M.nanmin(m.lonh[ind])
+        return mnp.nanmin(m.lonh[ind])
 
     def max_longitude(self, m, ind):
-        return M.nanmax(m.lonh[ind])
+        return mnp.nanmax(m.lonh[ind])
 
     def averageDA(self, m, ind):
         """Returns the angular distance from disk center in degrees."""
-        meanAngularRadius = M.nanmean(m.rg[ind])
-        return M.arcsin(meanAngularRadius/m.rsun)*180/np.pi
+        meanAngularRadius = mnp.nanmean(m.rg[ind])
+        return mnp.arcsin(meanAngularRadius/m.par['rsun'])*180/np.pi
 
     def mean_flux_density(self, arr, ind):
         """Returns the average corrected magnetic flux density."""
-        return M.mean(arr[ind])
+        return mnp.mean(arr[ind])
 
     def sum_area(self, m, ind):
         """Returns the total area covered by the quadrangle."""
         try:
-            return M.nansum(m.area[ind])
+            return mnp.nansum(m.area[ind])
         except AttributeError:
             m.eoa()
-            return M.nansum(m.area[ind])
+            return mnp.nansum(m.area[ind])
+
 
 def fragment_single(mgnt, n):
     """
@@ -68,6 +69,7 @@ def fragment_single(mgnt, n):
     print("Processing {}".format(n))
     fragInfo = get_fragmentation_info(mgnt, n)
     return fragmentation_loop(fragInfo)
+
 
 def fragment_multiple(m1, m2, n):
     """
@@ -85,6 +87,7 @@ def fragment_multiple(m1, m2, n):
     
     return blocks
 
+
 def get_fragmentation_info(m, n):
     """
     Inputs a mgnt and segmentation level (n) and outputs dict of parameters.
@@ -93,13 +96,13 @@ def get_fragmentation_info(m, n):
     information such as latitude/longitude interval space.
     """
 
-    m.lonh[m.rg > m.rsun*np.sin(85.0*np.pi/180)] = np.nan
-    m.lath[m.rg > m.rsun*np.sin(85.0*np.pi/180)] = np.nan
+    m.lonh[m.rg > m.par['rsun']*np.sin(85.0*np.pi/180)] = np.nan
+    m.lath[m.rg > m.par['rsun']*np.sin(85.0*np.pi/180)] = np.nan
     _flatten(m)
 
     # This supports reusing latitude and longitude bands for other mgnts.
     latBands = _split(n)
-    lonBands = _split(n, M.nanmin(m.lonh), M.nanmax(m.lonh))
+    lonBands = _split(n, mnp.nanmin(m.lonh), mnp.nanmax(m.lonh))
     lonMasks = []
 
     for lon in lonBands:
@@ -108,6 +111,7 @@ def get_fragmentation_info(m, n):
     fragInfo = {'mgnt': m, 'latBands': latBands, 'lonBands': lonBands, 
             'lonMasks': lonMasks}
     return fragInfo
+
 
 def fragmentation_loop(refFragInfo, secmgnt=None):
     """
@@ -128,7 +132,7 @@ def fragmentation_loop(refFragInfo, secmgnt=None):
     latBands = refFragInfo['latBands']
     lonBands = refFragInfo['lonBands']
     lonMasks = refFragInfo['lonMasks']
-    l = int(mgnt.im_raw.dimensions[0].value)
+    l, c = (int(x.value) for x in (mgnt.im_raw.dimensions[0], mgnt.im_raw.dimensions[1]))
     n = len(lonBands) - 1
 
     currLat = (mgnt.lath_1d > latBands[0])
@@ -155,7 +159,7 @@ def fragmentation_loop(refFragInfo, secmgnt=None):
             if ~(blockBool.any()):
                 continue
             else:
-                blockInd = _transform_indices(mgnt.ind_1d[blockBool], l)
+                blockInd = _transform_indices(mgnt.ind_1d[blockBool], l, c)
                 x = Quadrangle(mgnt, blockInd, int(uuid), secmgnt)
                 x.fragmentationValue = n
                 blocks.append(x)
@@ -163,9 +167,11 @@ def fragmentation_loop(refFragInfo, secmgnt=None):
 
     return blocks
 
+
 def _split(n, minimum=-90, maximum=90):
     """Returns an interval space based on n number of blocks."""
     return np.linspace(minimum, maximum, n + 1)
+
 
 def _flatten(m):
     """
@@ -177,11 +183,12 @@ def _flatten(m):
     m.lath_1d = m.lath.v.flatten()
     m.ind_1d = np.arange(np.size(m.lath_1d))
 
-    ind = np.where(M.isfinite(m.lonh_1d))
+    ind = np.where(mnp.isfinite(m.lonh_1d))
 
     m.lonh_1d = m.lonh_1d[ind]
     m.ind_1d = m.ind_1d[ind]
     m.lath_1d = m.lath_1d[ind]
+
 
 def _calc_area_ratio(latBands, lonBands, latBounds):
     """
@@ -202,12 +209,14 @@ def _calc_area_ratio(latBands, lonBands, latBounds):
 
     return areaRatio
 
-def _transform_indices(ind, l):
+
+def _transform_indices(ind, column_count, row_count):
     """Takes a 1D list of indices and calculates a 2D list of indices."""
 
-    cols = ind % l
-    rows = ind // l
-    return (rows, cols)
+    cols = ind % column_count
+    rows = ind // row_count
+    return rows, cols
+
 
 def extract_valid_points(bl):
     """Extracts the valid points from the dictionary set."""
@@ -222,6 +231,7 @@ def extract_valid_points(bl):
     # da[ind] = np.nan
 
     return flxD1, flxD2, da
+
 
 def printInfo(str):
     if info:

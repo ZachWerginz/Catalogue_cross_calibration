@@ -26,7 +26,7 @@ class CRD:
     RSUN_METERS = mnp.Measurement(sun.constants.radius.si.value, 26000)
     DSUN_METERS = mnp.Measurement(sun.constants.au.si.value, 0)
 
-    def __init__(self, filename):
+    def __init__(self, filename, rotate=0):
         """Reads magnetogram as a sunpy.map object."""
         self.fn = filename
         self.cached = False
@@ -52,6 +52,8 @@ class CRD:
             self.par['yscale'] = mnp.Measurement(self.im_raw.scale[1].value, 0.002)
             self.par['rsun'] = mnp.Measurement(self.im_raw.rsun_obs.value, 1)
             self.par['dsun'] = self.DSUN_METERS
+            if rotate != 0:
+                self.im_raw = self.im_raw.rotate(angle=rotate * u.deg)
         elif self.im_raw.detector == 'SPMG':
             self.par['X0'] = self.im_raw.meta['CRPIX1A']
             self.par['Y0'] = self.im_raw.meta['CRPIX2A']
@@ -62,13 +64,15 @@ class CRD:
             self.par['yscale'] = mnp.Measurement(self.im_raw.scale[1].value, 0)
             self.par['rsun'] = mnp.Measurement(self.im_raw.rsun_obs.value, 1)
             self.par['dsun'] = self.DSUN_METERS
+            if rotate != 0:
+                self.im_raw.rotate(angle=rotate * u.deg)
         elif self.im_raw.detector == 'MDI':
             self.par['rsun'] = mnp.Measurement(self.im_raw.rsun_obs.value, 1)
             self.par['dsun'] = mnp.Measurement(self.im_raw.dsun.value, 0)
             try:
-                self.P0 = self.im_raw.meta['p_angle']
+                self.P0 = self.im_raw.meta['p_angle'] - rotate
             except KeyError:
-                self.P0 = self.im_raw.meta['solar_p']
+                self.P0 = self.im_raw.meta['solar_p'] - rotate
             if self.P0 != 0:
                 self.im_raw = self.im_raw.rotate(angle=-self.P0 * u.deg)
             self.par['X0'], self.par['Y0'] = (x.value for x in self.im_raw.reference_pixel)
@@ -88,7 +92,7 @@ class CRD:
         elif self.im_raw.detector == 'HMI':
             self.par['rsun'] = mnp.Measurement(self.im_raw.rsun_obs.value, 1)
             self.par['dsun'] = mnp.Measurement(self.im_raw.dsun.value, 0)
-            self.P0 = self.im_raw.meta['CROTA2']
+            self.P0 = self.im_raw.meta['CROTA2'] - rotate
             if self.P0 != 0:
                 self.im_raw = self.im_raw.rotate(angle=-self.P0 * u.deg)
             self.par['X0'], self.par['Y0'] = (x.value for x in self.im_raw.reference_pixel)
@@ -123,7 +127,7 @@ class CRD:
     def heliographic(self, *args, array=True, corners=False):
         """Calculate heliographic coordinates from helioprojective cartesian coordinatesand returns it.
 
-        Can accept either a coordinate pair (x, y) or an entire 2D array.
+        Can accept either a coordinate pair (x, y) or the entire map.
         This pair corresponds the the pixel you want information on.
 
         Use standard python indexing conventions for both the single
@@ -133,6 +137,7 @@ class CRD:
         lath, lonh = kpvt.heliographic()
         aia.heliographic(320, 288, array=False)
         """
+
         if array and self.lonh is not None and not corners:
             return
 

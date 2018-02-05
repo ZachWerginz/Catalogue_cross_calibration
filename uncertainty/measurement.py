@@ -160,8 +160,8 @@ class Measurement:
     __array_priority__ = 10000
 
     def __init__(self, value, uncertainty):
-        self.v = np.asarray(value)
-        self.u = np.asarray(uncertainty)
+        self.v = value
+        self.u = uncertainty
 
     def __getitem__(self, index):
         return Measurement(self.v[index], self.u[index])
