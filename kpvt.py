@@ -1,4 +1,4 @@
-"""KPVT Map subclass definitions"""
+"""KPVT Map subclass definitions. This is used to register the KPVT instruments to sunpy."""
 
 from __future__ import absolute_import, print_function, division
 from sunpy.map import GenericMap
@@ -15,9 +15,7 @@ __all__ = ["Ch512Map", "SPMGMap"]
 
 
 class Ch512Map(GenericMap):
-    """KPVT 512 Channel Image Map.
-
-    """
+    """KPVT 512 Channel Image Map."""
 
     def __init__(self, data, header, **kwargs):
 
@@ -43,10 +41,12 @@ class Ch512Map(GenericMap):
             "The ability to index Map by physical coordinate is not yet implemented.")
 
     def meta(self):
+        """Returns a neat list of header cards."""
         return super(Ch512Map, self).meta()
 
     @property
     def scale(self):
+        """Returns the scale of the instrument."""
         return Pair(self.meta['cdelt1'] * self.spatial_units[0] / u.pixel * self.meta['CRR_SCLX'],
                     self.meta['cdelt2'] * self.spatial_units[1] / u.pixel * self.meta['CRR_SCLY'])
 
@@ -68,9 +68,7 @@ class Ch512Map(GenericMap):
 
 
 class SPMGMap(GenericMap):
-    """KPVT SPMG Channel Image Map.
-
-    """
+    """KPVT SPMG Channel Image Map."""
 
     def __init__(self, data, header, **kwargs):
 
@@ -97,6 +95,7 @@ class SPMGMap(GenericMap):
             "The ability to index Map by physical coordinate is not yet implemented.")
 
     def meta(self):
+        """Returns a neat list of header cards."""
         return super(SPMGMap, self).meta()
 
     @property
@@ -112,6 +111,7 @@ class SPMGMap(GenericMap):
 
     @property
     def scale(self):
+        """Returns the scale of the instrument."""
         return Pair(self.meta['cdelt1'] * self.spatial_units[0] / u.pixel * self.meta['CRR_SCLX'],
                     self.meta['cdelt2'] * self.spatial_units[1] / u.pixel * self.meta['CRR_SCLY'])
 
