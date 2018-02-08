@@ -1,33 +1,46 @@
 """This script was meant to create a set of 3 figures each with 3 plots showing the fragmentation of the solar disk,
 a 2-dimensional histogram and violin plots."""
 
+import random
+
+import matplotlib.pyplot as plt
+import numpy as np
+
 import cross_calibration as c
 import quadrangles_keep_inds as temp_q
-import matplotlib.pyplot as plt
-import visualizations.cc_plot as ccplot
-import random
-import numpy as np
 import util as u
+import visualizations.cc_plot as ccplot
 
 
 def data(raw_remap=False):
+    """Loads sample data into memory.
+
+    :param bool raw_remap:   select True if you want raw field instead of line-of-sight correction
+    :return:                 returns a tuple of two data maps
+    """
     f1 = "test_mgnts/spmg_eo100_C1_19920424_1430.fits"
     f2 = "test_mgnts/spmg_eo100_C1_19920425_1540.fits"
 
-    if raw_remap:
-        m1, m2 = c.fix_longitude(f1, f2, raw_remap=True)
-    else:
-        m1, m2 = c.fix_longitude(f1, f2)
+    m1, m2 = c.fix_longitude(f1, f2, raw_remap=True)
     return m1, m2
 
 
 def add_identity(axes, *line_args, **line_kwargs):
-    """Plots the identity line on the specified axis."""
+    """Adds the identity line to a plot (y=x).
+
+    :param obj axes:            matplotlib axes object for which to add the identity line to
+    :param line_args:       additional line arguments
+    :param line_kwargs:     additional line keywords
+    """
     identity, = axes.plot([], [], *line_args, **line_kwargs)
 
-    def callback(axes):
-        low_x, high_x = axes.get_xlim()
-        low_y, high_y = axes.get_ylim()
+    def callback(ax):
+        """Provides the mechanism for recalculating the identity line if the plot is resized.
+
+        :param obj ax: axis that is being resized
+        """
+        low_x, high_x = ax.get_xlim()
+        low_y, high_y = ax.get_ylim()
         low = max(low_x, low_y)
         high = min(high_x, high_y)
         identity.set_data([low, high], [low, high])
@@ -37,7 +50,12 @@ def add_identity(axes, *line_args, **line_kwargs):
 
 
 def block_plot(m1, blocks, ax1):
-    """Given a list of blocks, will plot a nice image differentiating them."""
+    """Given a list of blocks, will plot a nice image differentiating them.
+
+    :param obj m1:          CRD object who's image data will be shown
+    :param list blocks:     list of quadrangles to be plotted as blocks
+    :param obj ax1:         matplotlib axis object to plot on
+    """
     im1 = m1.lonh.v.copy()
     im1[:] = np.nan
     for x in blocks:
@@ -48,6 +66,12 @@ def block_plot(m1, blocks, ax1):
 
 
 def hexbin(points, ax):
+    """Plots a hexbin of the points on a given axis.
+
+    :param dict points:     a list of quadrangles containing magnetic info
+    :param obj ax:          matplotlib axis to plot on
+    :return:                returns matplotlib axis
+    """
     y, x, da = temp_q.extract_valid_points(points)
 
     co = 'inferno'
@@ -77,6 +101,13 @@ def hexbin(points, ax):
 
 
 def plot_row(f, m1, blocks, results):
+    """Plots three axes on a figure - the fragmentation, a hexbin plot, and a violin plot.
+
+    :param obj f:           figure to plot on
+    :param obj m1:          CRD object who's image data will be shown
+    :param list blocks:     list of quadrangles to show fragmentation
+    :param dict results:    points to provide for the hexbin
+    """
     f.subplots_adjust(left=.1, right=.9, wspace=0)
     ax1 = f.add_subplot(131, projection=m1.im_raw.wcs)
     ax2 = f.add_subplot(132)
@@ -102,6 +133,7 @@ def plot_row(f, m1, blocks, results):
 
 
 def main():
+    """Fragments two magnetograms at a level of 25, 50, and 100 and shows example plots of summary data."""
     plt.ion()
     axis_font = {'horizontalalignment': 'center', 'verticalalignment': 'center'}
     plt.rc('text', usetex=True)
@@ -146,10 +178,6 @@ def main():
     ax3.set_yticks([-500, 0, 500])
     ax3.set_yticklabels([r'$-500$', r'$0$', r'$500$'], ha='right')
 
-    # ax2.set_xlabel(r'$\mathrm{{Magnetic\ Flux\ Density\ (Mx/cm^2)}}$', labelpad=20, size=23, **axis_font)
-    # ax3.set_ylabel(r'$\mathrm{{Magnetic\ Flux\ Density\ (Mx/cm^2)}}$', labelpad=20, rotation=270, size=23, **axis_font)
-    # f4.suptitle("Fragmentation with n=50 and Flux Scatter Plot", y=.77, fontsize=30, fontweight='bold')
-
     plt.draw()
     plt.show()
 
@@ -164,7 +192,7 @@ def main():
             color = 'black'
         ax.annotate(
                 '{0}'.format(letter),
-                xy=(0,1), xycoords='axes fraction',
+                xy=(0, 1), xycoords='axes fraction',
                 xytext=(7, -25), textcoords='offset points',
                 ha='left', va='bottom', fontsize=19, color=color, family='serif')
 

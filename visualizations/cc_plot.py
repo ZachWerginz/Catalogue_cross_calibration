@@ -455,7 +455,7 @@ def violin_plot(bl, dL, ax, clr='blue', alpha=.75, percentiles=[25, 75], correct
     hl, x, y = hist_axis(bl, dL, **kwargs)
     y2 = np.array([t['med'] for t in hl])
     x2 = np.array([s['sliceMed'] for s in hl])
-    ind = ((y2 > 0) & (x2 > 0)) | ((y2 < 0) & (x2 < 0))
+    #ind = ((y2 > 0) & (x2 > 0)) | ((y2 < 0) & (x2 < 0))
     y2 = y2[ind]
     x2 = x2[ind]
     lim = max(np.max(np.abs(x2)), np.max(np.abs(y2)))*1.1
