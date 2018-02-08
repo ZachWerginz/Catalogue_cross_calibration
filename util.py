@@ -1,4 +1,12 @@
-"""Provides all sorts of utility functions for i/o, dates, and files."""
+"""Provides utility functions for i/o.
+
+This module provides utility functions designed for easy access to the Postgres database and dealing with magnetograms.
+There are also functions to convert between data types like the integer mission day and a datetime object.
+
+Attributes:
+    data_root (str): This is the root level of where the fits files are being stored in.
+    debug (bool): whether or not to show debugging messages
+"""
 import datetime as dt
 import glob
 import os.path
@@ -80,20 +88,23 @@ def load_local_cc_data():
 def download_cc_data(i1, i2, n, tol1, tol2):
     """Downloads cross-calibration data from database for a given time interval and set of instruments.
 
-    :param str i1:      reference instrument
-    :param str i2:      secondary instrument
-    :param int n:       fragmentation parameter
-    :param str tol1:    earliest time difference between two magnetograms
-    :param str tol2:    latest time difference between two magnetograms
-    :return:            dictionary of results in array form
+    Args:
+        i1 (str): the reference instrument
+        i2 (str): the secondary instrument
+        n (int): fragmentation parameter
+        tol1 (str): earliest time difference between two magnetograms
+        tol2 (str): latest time difference between two magnetograms
 
-    :Example:
+    Returns:
+        result: dictionary of results in array form
 
-    >>> r_25 = u.download_cc_data('spmg', 'spmg', 25, '23 hours', '25 hours')
-    >>> r_25
-    {'diskangle': array([...]), 'i1': 'spmg', 'i2': 'spmg', 'n': 25, 'referenceFD': array([...]),
-    'secondaryFD': array([...]), 'timeDifference': datetime.timedelta(1)}
+    Example:
+        >>> r_25 = u.download_cc_data('spmg', 'spmg', 25, '23 hours', '25 hours')
+        >>> r_25
+        {'diskangle': array([...]), 'i1': 'spmg', 'i2': 'spmg', 'n': 25, 'referenceFD': array([...]),
+        'secondaryFD': array([...]), 'timeDifference': datetime.timedelta(1)}
     """
+
     conn = load_database()
     cur = conn.cursor("server_side")
     fetchlimit = 10000000
@@ -212,10 +223,13 @@ def load_sim(fn):
 def search_file(date, instr, auto=True):
     """Searches for a file with a given date and instrument and returns a list of filepaths.
 
-    :param str obj date:    date of desired file - datetime or str
-    :param str instr:   instrument of desired file
-    :param bool auto:    whether to autoselect a file from a group of similar files for one particular day
-    :return:        list or singular file
+    Args:
+        date (str) (obj): date of desired file - datetime or str
+        instr (str): instrument of desired file
+        auto (bool): whether to autoselect a file from a group of similar files for one particular day
+
+    Returns:
+        files: list of files or singular file
     """
     if not isinstance(date, dt.datetime):
         date = sunpy.time.parse_time(date)
@@ -267,8 +281,11 @@ def search_file(date, instr, auto=True):
 def mdi_file_choose(f):
     """Chooses the best file from a MDI mission day based on missing values and timing interval.
 
-    :param list f:  list of MDI files
-    :return:        singular filepath
+    Args:
+        f (list): list of MDI files
+
+    Returns:
+        best: singular filepath for best magnetogram
     """
     best = f[-1]    # default to last element
     ival = 0
@@ -308,9 +325,12 @@ def pdebug(string):
 def diff_rot(m1, m2):
     """Given two CRD objects, differentially rotate image 2 to match image 1
 
-    :param obj m1:  first image to rotate to
-    :param obj m2:  second image to be rotated differentially
-    :return:        rotation array containing values to add to longitude
+    Args:
+        m1 (obj): first image to rotate to
+        m2 (obj): second image to be rotated differentially
+
+    Returns:
+        rotation: rotation array containing values to add to longitude
     """
     time_diff = u.Quantity(
             (m1.im_raw.date - m2.im_raw.date).total_seconds(), 'second')

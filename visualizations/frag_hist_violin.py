@@ -1,5 +1,12 @@
-"""This script was meant to create a set of 3 figures each with 3 plots showing the fragmentation of the solar disk,
-a 2-dimensional histogram and violin plots."""
+"""This script was meant to creates visualization plots for fragmentation.
+
+In order to show fragmentation of the solar disk and preliminary results, we plot three axes on a figure. One contains
+the solar disk with overlaid colored blocks as a visual aid to show how the solar disk is being fragmented. The other
+two panels contain a two dimensional histogram as well as violin plots.
+
+Todo:
+    (Zach) Actually change the hexbins to 2d histograms
+"""
 
 import random
 
@@ -15,8 +22,12 @@ import visualizations.cc_plot as ccplot
 def data(raw_remap=False):
     """Loads sample data into memory.
 
-    :param bool raw_remap:   select True if you want raw field instead of line-of-sight correction
-    :return:                 returns a tuple of two data maps
+    Args:
+        raw_remap (bool): select True if you want raw field instead of line-of-sight correction
+
+    Returns:
+        m1: The first magnetogram CRD object.
+        m2: The second magnetogram CRD object.
     """
     f1 = "test_mgnts/spmg_eo100_C1_19920424_1430.fits"
     f2 = "test_mgnts/spmg_eo100_C1_19920425_1540.fits"
@@ -28,9 +39,10 @@ def data(raw_remap=False):
 def add_identity(axes, *line_args, **line_kwargs):
     """Adds the identity line to a plot (y=x).
 
-    :param obj axes:            matplotlib axes object for which to add the identity line to
-    :param line_args:       additional line arguments
-    :param line_kwargs:     additional line keywords
+    Args:
+        axes (obj): matplotlib axes object for which to add the identity line to
+        *line_args: additional line arguments
+        **line_kwargs: additional line keywords
     """
     identity, = axes.plot([], [], *line_args, **line_kwargs)
 
@@ -52,9 +64,10 @@ def add_identity(axes, *line_args, **line_kwargs):
 def block_plot(m1, blocks, ax1):
     """Given a list of blocks, will plot a nice image differentiating them.
 
-    :param obj m1:          CRD object who's image data will be shown
-    :param list blocks:     list of quadrangles to be plotted as blocks
-    :param obj ax1:         matplotlib axis object to plot on
+    Args:
+        m1 (obj): CRD object who's image data will be shown
+        blocks (list): list of quadrangles to be plotted as blocks
+        ax1 (obj): matplotlib axis object to plot on
     """
     im1 = m1.lonh.v.copy()
     im1[:] = np.nan
@@ -68,9 +81,12 @@ def block_plot(m1, blocks, ax1):
 def hexbin(points, ax):
     """Plots a hexbin of the points on a given axis.
 
-    :param dict points:     a list of quadrangles containing magnetic info
-    :param obj ax:          matplotlib axis to plot on
-    :return:                returns matplotlib axis
+    Args:
+        points (dict): a list of quadrangles containing magnetic info
+        ax (obj): matplotlib axis to plot on
+
+    Returns:
+        hb: the hexbin axis
     """
     y, x, da = temp_q.extract_valid_points(points)
 
@@ -103,10 +119,11 @@ def hexbin(points, ax):
 def plot_row(f, m1, blocks, results):
     """Plots three axes on a figure - the fragmentation, a hexbin plot, and a violin plot.
 
-    :param obj f:           figure to plot on
-    :param obj m1:          CRD object who's image data will be shown
-    :param list blocks:     list of quadrangles to show fragmentation
-    :param dict results:    points to provide for the hexbin
+    Args:
+        f (obj): figure to plot on
+        m1 (obj): CRD object who's image data will be shown
+        blocks (list): list of quadrangles to show fragmentation
+        results (dict): points to provide for the hexbin
     """
     f.subplots_adjust(left=.1, right=.9, wspace=0)
     ax1 = f.add_subplot(131, projection=m1.im_raw.wcs)

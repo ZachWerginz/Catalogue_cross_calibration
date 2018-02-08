@@ -1,35 +1,74 @@
+"""Provides the machinery for reading in fits files and calculating attributes used in the analysis.
+
+This module contains the CRD class used for working with fits files and the coordinate information we will be working
+with for cross calibration in an easy way.
+
+Todo:
+    Get rid of the pixel thing and just make everything array-wide operations by now.
+"""
 from __future__ import division
-import numpy as np
-import sunpy.map
-from sunpy.sun import sun
-import astropy.units as u
-from astropy.io import fits
+
 import os.path
 import kpvt
 
+import astropy.units as u
+import numpy as np
+import sunpy.map
+from astropy.io import fits
+from sunpy.sun import sun
+
 import uncertainty.measurement as mnp
 
-__authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
+__authors__ = ["Zach Werginz", "Andrés Muñoz-Jaramillo"]
 __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
 
 
 class CRD:
-    """Calculates various magnetogram coordinate information.
-    Can calculate heliographic coordinate information,
-    line of sight (LOS) corrections for the magnetic field,
-    area elements for each pixel, and magnetic flux. This can
-    be done for one pixel, or the whole data map. If the whole
-    data map is given as a parameter, it will save the information
-    as an instance attribute for the object.
+    """Read in a fits file and calculates various magnetogram coordinate information.
+
+    First the class reads the fits file as a sunpy map object to provide us with some useful high-level functions for
+    extracting information easiliy. A typical instatiation should go something like this: wrap the filename with CRD()
+    and call the magnetic_flux() function to populate all the extra calculations. This will calculate heliographic
+    longitude, heliographic latitude, a line-of-sight correction, pixel area, and pixel magnetic flux for the whole
+    image. If the area and flux are not needed, it is sufficient to just call the heliographic() and los_corr() methods
+    - they are much faster.
+
+    Attributes:
+        rsun_meters: radius of the sun in meters
+        dsun_meters: distance of the sun from the earth in meters
+
+    Examples:
+        >>> mgnt = CRD('fd_M_96m_01d.4219.0000.fits')
+        >>> mgnt.heliographic()
+        >>> mgnt.los_corr()
+        >>> mgnt.eoa()
+        >>> mgnt.magnetic_flux()
+        >>> mgnt.par
+        {'B0': Measurement(4.918841303479, 0.04918841303479),
+        'L0': Measurement(17.74726719194, 0.1774726719194),
+        'SL0': Measurement(-0.24830962816345092, 0.1774726719194),
+        'X0': 513.3475036737464,
+        'Y0': 513.6332168712381,
+        'dsun': Measurement(150578367044.1338, 0),
+        'rsun': Measurement(952.7186785154763, 1),
+        'xscale': Measurement(1.982, 0.003),
+        'yscale': Measurement(1.982, 0.003)}
     """
 
-    RSUN_METERS = mnp.Measurement(sun.constants.radius.si.value, 26000)
-    DSUN_METERS = mnp.Measurement(sun.constants.au.si.value, 0)
+    rsun_meters = mnp.Measurement(sun.constants.radius.si.value, 26000)
+    dsun_meters = mnp.Measurement(sun.constants.au.si.value, 0)
 
     def __init__(self, filename, rotate=0):
-        """Reads magnetogram as a sunpy.map object."""
+        """Read a magnetogram as a sunpy.map object.
+
+        Args:
+            filename (str): filepath of magnetogram
+            rotate (float, optional): amount to rotate the image, defaults to zero
+
+        Raises:
+            IOError: if the fits file does not fit one the file specifications or the file does not exist
+        """
         self.fn = filename
-        self.cached = False
         self.im_corr = None
         self.lath = None
         self.lonh = None
@@ -37,10 +76,6 @@ class CRD:
         self.mflux_raw = None
         self.area = None
         self.par = {}
-        try:
-            self._load_cache()
-        except IOError:
-            self.im_raw = sunpy.map.Map(filename)
 
         if self.im_raw.detector == '512':
             self.par['X0'] = self.im_raw.meta['CRPIX1A']
@@ -51,7 +86,7 @@ class CRD:
             self.par['xscale'] = mnp.Measurement(self.im_raw.scale[0].value, 0.002)
             self.par['yscale'] = mnp.Measurement(self.im_raw.scale[1].value, 0.002)
             self.par['rsun'] = mnp.Measurement(self.im_raw.rsun_obs.value, 1)
-            self.par['dsun'] = self.DSUN_METERS
+            self.par['dsun'] = self.dsun_meters
             if rotate != 0:
                 self.im_raw = self.im_raw.rotate(angle=rotate * u.deg)
         elif self.im_raw.detector == 'SPMG':
@@ -63,7 +98,7 @@ class CRD:
             self.par['xscale'] = mnp.Measurement(self.im_raw.scale[0].value, 0)
             self.par['yscale'] = mnp.Measurement(self.im_raw.scale[1].value, 0)
             self.par['rsun'] = mnp.Measurement(self.im_raw.rsun_obs.value, 1)
-            self.par['dsun'] = self.DSUN_METERS
+            self.par['dsun'] = self.dsun_meters
             if rotate != 0:
                 self.im_raw.rotate(angle=rotate * u.deg)
         elif self.im_raw.detector == 'MDI':
@@ -115,27 +150,27 @@ class CRD:
     def __repr__(self):
         print(self.im_raw.__repr__())
 
-    def __del__(self):
-        # if not self.cached and hasattr(self, 'area'):
-        #    self._save_cache()
-        pass
-
     def meta(self):
         """Prints the sunpy map header."""
         print(self.im_raw.meta)
 
     def heliographic(self, *args, array=True, corners=False):
-        """Calculate heliographic coordinates from helioprojective cartesian coordinatesand returns it.
+        """Calculate heliographic coordinates from helioprojective cartesian coordinates and return it.
 
-        Can accept either a coordinate pair (x, y) or the entire map.
-        This pair corresponds the the pixel you want information on.
+        Can accept either a coordinate pair (x, y) or the entire map. This pair cor5responds the the pixel you
+        want information on. Use standard python indexing conventions for both the single coordinate and array
+        calculations [row, column].
 
-        Use standard python indexing conventions for both the single
-        coordinate and array calculations [row, column].
 
-        Examples:
-        lath, lonh = kpvt.heliographic()
-        aia.heliographic(320, 288, array=False)
+        Args:
+            *args: pixel coordinates
+            array (bool, optional): whether or not to calculate the whole image map, defaults to True
+            corners (bool, optional): choose whether to shift by a half a pixel to get coordinates for original map
+                pixel corners, defaults to False
+
+        Returns:
+            lonh (np.array): heliographic longitude
+            lath (np.array): heliographic latitude
         """
 
         if array and self.lonh is not None and not corners:
@@ -170,10 +205,15 @@ class CRD:
     def los_corr(self, *args, array=True):
         """Takes in coordinates and returns corrected magnetic field.
 
-        Applies the dot product between the observers unit vector and
-        the heliographic radial vector to get the true magnitude of
-        the magnetic field vector. See geometric projection for
-        calulations.
+        Applies the dot product between the observers unit vector and the heliographic radial vector to get the true
+        magnitude of the magnetic field vector. See geometric projection for calulations.
+
+        Args:
+            *args: pixel coordinates
+            array (bool, optional): whether or not to calculate the whole image map, defaults to True
+
+        Returns:
+            calculation: the line-of-sight correction
         """
 
         if array and self.im_corr is not None:
@@ -210,19 +250,24 @@ class CRD:
     def eoa(self, *args, array=True):
         """Takes in coordinates and returns the area of pixels on sun.
 
-        Each pixel is projected onto the sun, and therefore pixels close to
-        the limbs have vastly greater areas. This function uses a closed form
-        solution to a spherical area integral to calulate the area based on
-        the heliographic coordinate unit vectors of each corner of the pixel.
-        We use these to calculate a solid angle of a pyramid with its apex
-        at the center of the sun.
+        Each pixel is projected onto the sun, and therefore pixels close to the limbs have vastly greater areas. This
+        function uses a closed form solution to a spherical area integral to calulate the area based on the heliographic
+        coordinate unit vectors of each corner of the pixel. We use these to calculate a solid angle of a pyramid with
+        its apex at the center of the sun. We will assume that the coordinate is in the center of the pixel as described
+        in this article
+
+        http://www.aanda.org/component/article?access=bibcode&bibcode=&bibcode=2002A%2526A...395.1061GFUL
+
+        Args:
+            *args: pixel coordinates
+            array (bool, optional): whether or not to calculate the whole image map, defaults to True
+
+        Returns:
+            calculation: the area element for each pixel
         """
 
         if array and self.area is not None:
             return
-        # Assume coordinate is in center of pixel.
-        # Information on pixel standard is in this article.
-        # http://www.aanda.org/component/article?access=bibcode&bibcode=&bibcode=2002A%2526A...395.1061GFUL
         if array:
             print("Calculating element of area...")
             lon, lat = self.heliographic(corners=True)
@@ -269,7 +314,7 @@ class CRD:
         solid_angle2 = 2 * mnp.arctan2(numerator2, (mnp.dot(r3, r4) + mnp.dot(r4, r1) + mnp.dot(r3, r1) + 1))
         solid_angle = solid_angle1 + solid_angle2
 
-        r = self.RSUN_METERS * 100  # Convert to centimeters
+        r = self.rsun_meters * 100  # Convert to centimeters
         if array:
             self.area = abs((r ** 2) * solid_angle)
             ind = np.where(self.Rg[1:len(self.Rg) - 1, 1:len(self.Rg) - 1] > self.par['rsun'])
@@ -283,7 +328,19 @@ class CRD:
                 return np.abs((r ** 2) * solid_angle)
 
     def magnetic_flux(self, *args, array=True, raw_field=False):
-        """Takes in coordinates and returns magnetic flux of pixel."""
+        """Takes in coordinates and returns magnetic flux of pixel.
+
+        This calculation is just the area times the magnetic flux density (field strength).
+
+        Args:
+            *args: pixel coordinates
+            array (bool, optional): whether or not to calculate the whole image map, defaults to True
+            raw_field (bool, optional): choose between raw field (True) or line-of-sight correction (False), defaults
+                to False
+
+        Returns:
+            object: the magnetic flux array
+        """
         if not array:
             return self.eoa(*args) * self.los_corr(*args)
         else:
@@ -313,9 +370,15 @@ class CRD:
     def _grid(self, corners=False):
         """Create an xy grid of coordinates for heliographic array.
 
-        Uses meshgrid. If corners is selected, this function will shift
-        the array by half a pixel in both directions so that the corners
-        of the normal array can be accessed easily.
+        Uses meshgrid. If corners is selected, this function will shift the array by half a pixel in both directions
+        so that the corners of the normal array can be accessed easily.
+
+        Args:
+            corners (bool, optional): defaults to False, chooses whether to apply the corner calculation or not
+
+        Returns:
+            xg: 2D array containing the x-coordinates of each pixel
+            yg: 2D array containing the y-coordinates of each pixel
         """
         # Retrieve integer dimensions and create arrays holding
         # x and y coordinates of each pixel
@@ -342,20 +405,27 @@ class CRD:
     def _hpc_hcc(self, x, y):
         """Converts hpc coordinates to hcc coordinates.
 
-        x -- x coordinate in arcseconds
-        y -- y coordinate in arcseconds
         Calculations taken and shortened from sunpy.wcs.
+
+        Args:
+            x: x coordinate in arcseconds
+            y: y coordinate in arcseconds
+
+        Returns:
+            rx: x coordinate 
+            ry:
+            rz:
         """
         x *= np.deg2rad(1) / 3600.0
         y *= np.deg2rad(1) / 3600.0
 
         q = self.par['dsun'] * mnp.cos(y) * mnp.cos(x)
-        distance = q ** 2 - self.par['dsun'] ** 2 + self.RSUN_METERS ** 2
+        distance = q ** 2 - self.par['dsun'] ** 2 + self.rsun_meters ** 2
         distance = q - mnp.sqrt(distance)
 
         rx = distance * mnp.cos(y) * mnp.sin(x)
         ry = distance * mnp.sin(y)
-        rz = mnp.sqrt(self.RSUN_METERS ** 2 - rx ** 2 - ry ** 2)
+        rz = mnp.sqrt(self.rsun_meters ** 2 - rx ** 2 - ry ** 2)
 
         return rx, ry, rz
 
@@ -412,7 +482,7 @@ class CRD:
         return r
 
     def _get_instrument(self, mfits):
-        """Returns the fits primary data HDU index."""
+        """Deprecated"""
 
         if len(mfits[0].header) < 10:
             return 1
@@ -420,8 +490,7 @@ class CRD:
             return 0
 
     def _save_cache(self):
-        """Saves magnetogram with coordinate data in alternate fits file."""
-
+        """Deprecated"""
         mfits = fits.open(self.fn)
         attr = [self.lonh, self.lath, self.area, self.im_corr]
         units = ['deg', 'deg', 'cm^2', 'G', 'Mx']
@@ -444,6 +513,7 @@ class CRD:
         mfits.close()
 
     def _load_cache(self):
+        """Deprecated"""
         paths = os.path.splitdrive(self.fn.replace('.fits', '.CRD.fits'))
         self.cached_fn = os.path.join(paths[0], 'CRD', paths[1])
         mfits = fits.open(self.cached_fn)
