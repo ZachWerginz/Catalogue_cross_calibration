@@ -1,7 +1,29 @@
+"""Personalized project uncertainty module.
+
+This module attaches an uncertainty to variables by creating a new object Measurement that has a value and an
+uncertainty. When performing operations the uncertainty should propogate as expected. This module had inspirations from
+the uncertainties python package:
+
+Uncertainties: a Python package for calculations with uncertainties, Eric O. LEBIGOT,
+http://pythonhosted.org/uncertainties/
+
+That package was not chosen because of performance issues since it does all the correlation calculations using
+auto-differentiation and I do not.
+"""
+
 import numpy as np
 np.seterr(invalid='ignore')
 
+
 def cos(x):
+    """Return the cosine of the input.
+
+    Args:
+        x: value or array of values
+
+    Returns:
+        result: cos(x)
+    """
     try:
         return Measurement(np.cos(x.v), np.abs(np.sin(x.v) * x.u))
     except AttributeError:
@@ -9,6 +31,14 @@ def cos(x):
 
 
 def sin(x):
+    """Return the sine of the input.
+
+    Args:
+        x: value or array of values
+
+    Returns:
+        result: sin(x)
+    """
     try:
         return Measurement(np.sin(x.v), np.abs(np.cos(x.v) * x.u))
     except AttributeError:
@@ -16,6 +46,14 @@ def sin(x):
 
 
 def arctan(x):
+    """Return the arctangent of the input.
+
+    Args:
+        x: value or array of values
+
+    Returns:
+        result: arctan(x)
+    """
     try:
         val = np.arctan(x.v)
         unc = 1 / (1 + x.v * x.v) * x.u
@@ -25,6 +63,14 @@ def arctan(x):
 
 
 def arctan2(x, y):
+    """Return the arctan2 of the input.
+
+    Args:
+        x: value or array of values
+
+    Returns:
+        result: arctan2(x)
+    """
     try:
         val = np.arctan2(x.v, y.v)
         z = x / y
@@ -35,6 +81,14 @@ def arctan2(x, y):
 
 
 def arcsin(x):
+    """Return the arcsin of the input.
+
+    Args:
+        x: value or array of values
+
+    Returns:
+        result: arcsin(x)
+    """
     try:
         val = np.arcsin(x.v)
         unc = (1 / np.sqrt(1 - x.v * x.v)) * x.u
@@ -44,6 +98,14 @@ def arcsin(x):
 
 
 def sqrt(x):
+    """Return the square root of the input.
+
+    Args:
+        x: value or array of values
+
+    Returns:
+        result: sqrt(x)
+    """
     try:
         return Measurement(np.sqrt(x.v), 0.5 * np.abs(x.u / np.sqrt(x.v)))
     except AttributeError:
@@ -51,10 +113,28 @@ def sqrt(x):
 
 
 def deg2rad(x):
+    """Convert degrees to radians.
+
+    Args:
+        x: value or array of values
+
+    Returns:
+        result: x * pi/180
+    """
     return x * np.pi / 180
 
 
 def cross(a, b, axis=0):
+    """Return the cross product of two vectors.
+
+    Args:
+        a: first vector
+        b: second vector
+        axis: which axis to take the cross product on
+
+    Returns:
+        result: cross(a, b)
+    """
     values_a = np.array([a[0].v, a[1].v, a[2].v])
     values_b = np.array([b[0].v, b[1].v, b[2].v])
     unc_a = np.array([a[0].u, a[1].u, a[2].u])
@@ -69,10 +149,27 @@ def cross(a, b, axis=0):
 
 
 def dot(a, b):
+    """Return the dot product of two vectors element-wise.
+
+    Args:
+        a: first vector
+        b: second vector
+
+    Returns:
+        result: dot(a, b) element-wise
+    """
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
 
 def nansum(array):
+    """Return the sum of an array ignoring nans.
+
+    Args:
+        array: array of values
+
+    Returns:
+        result: np.nansum(array)
+    """
     try:
         unc = 0
         for i in np.nditer(array.u):
@@ -84,6 +181,14 @@ def nansum(array):
 
 
 def nanmean(array):
+    """Return the mean of an array ignoring nans.
+
+    Args:
+        array: array of values
+
+    Returns:
+        result: np.nanmean(array)
+    """
     try:
         i = 0
         unc = 0
@@ -102,6 +207,14 @@ def nanmean(array):
 
 
 def mean(array):
+    """Return the mean of an array.
+
+    Args:
+        array: array of values
+
+    Returns:
+        result: np.mean(array)
+    """
     try:
         i = 0
         unc = 0
@@ -120,6 +233,14 @@ def mean(array):
 
 
 def isfinite(array):
+    """Test for finiteness (not nan or infinite).
+
+    Args:
+        array: array of values
+
+    Returns:
+        result: np.isfinite(array)
+    """
     try:
         return np.isfinite(array.v)
     except AttributeError:
@@ -127,6 +248,14 @@ def isfinite(array):
 
 
 def isnan(array):
+    """Test for nan value.
+
+    Args:
+        array: array of values
+
+    Returns:
+        result: np.isnan(array)
+    """
     try:
         return np.isnan(array.v)
     except AttributeError:
@@ -134,6 +263,14 @@ def isnan(array):
 
 
 def nanmax(array):
+    """Find the max of the array ignoring nans.
+
+    Args:
+        array: array of values
+
+    Returns:
+        result: np.nanmax(array)
+    """
     try:
         return np.nanmax(array.v)
     except AttributeError:
@@ -141,6 +278,14 @@ def nanmax(array):
 
 
 def nanmin(array):
+    """Find the min of the array ignoring nans.
+
+    Args:
+        array: array of values
+
+    Returns:
+        result: np.nanmin(array)
+    """
     try:
         return np.nanmin(array.v)
     except AttributeError:
@@ -148,6 +293,15 @@ def nanmin(array):
 
 
 def meshgrid(x_row, y_row):
+    """Calculate a grid of values given an array of x-coordinates of a 2d array and the y-coordinates.
+
+    Args:
+        x_row: values for x-coordinates
+        y_row: values for y-coordinates
+
+    Returns:
+        result: np.meshgrid(x_row, y_row)
+    """
     xg = Measurement(0, 0)
     yg = Measurement(0, 0)
     xg.v, yg.v = np.meshgrid(x_row.v, y_row.v, indexing='xy')
@@ -156,12 +310,23 @@ def meshgrid(x_row, y_row):
 
 
 class Measurement:
+    """This class is an extension of numpy's ndarray including uncertainty.
+
+    Without subclassing ndarray, this adds the functionality of uncertainty to numpy's ndarray and all the required
+    operations.
+
+    Examples:
+          >>> import uncertainty.measurement as mnp
+          >>> a = mnp.Measurement(5, 3)
+          >>> print(a)
+          5 +/- 1
+    """
     # Set array priority to override some of ndarray's ufunc binary relations
     __array_priority__ = 10000
 
     def __init__(self, value, uncertainty):
-        self.v = value
-        self.u = uncertainty
+        self.v = np.asarray(value)
+        self.u = np.asarray(uncertainty)
 
     def __getitem__(self, index):
         return Measurement(self.v[index], self.u[index])

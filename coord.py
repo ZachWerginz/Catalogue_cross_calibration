@@ -405,16 +405,17 @@ class CRD:
     def _hpc_hcc(self, x, y):
         """Converts hpc coordinates to hcc coordinates.
 
-        Calculations taken and shortened from sunpy.wcs.
+        Calculations taken and shortened from sunpy.wcs. Transforms an array from helioprojective cartesian coordinates
+        to heliocentric cartesian.
 
         Args:
             x: x coordinate in arcseconds
             y: y coordinate in arcseconds
 
         Returns:
-            rx: x coordinate 
-            ry:
-            rz:
+            rx: x coordinate in meters
+            ry: y coordinate in meters
+            rz: z coordinate in meters
         """
         x *= np.deg2rad(1) / 3600.0
         y *= np.deg2rad(1) / 3600.0
@@ -432,11 +433,17 @@ class CRD:
     def _hcc_hg(self, x, y, z, b0=0, l0=0):
         """Converts hcc coordinates to Stonyhurst heliographic.
 
-        x - x coordinate in meters
-        y - y coordinate in meters
-        z - z coordinate in meters
-        Calculations taken and shortened
-        from sunpy.wcs.
+        Calculations taken and shortened from sunpy.wcs. Transforms an array from heliocentric cartesian coordinates
+        to heliographic.
+
+        Args:
+            x (array): x coordinate in meters
+            y (array): y coordinate in meters
+            z (array): z coordinate in meters
+
+        Returns:
+            hgln (array): heliographic longitude
+            hglt (array): heliographic latitute
         """
         cosb = mnp.cos(mnp.deg2rad(b0))
         sinb = mnp.sin(mnp.deg2rad(b0))
@@ -447,13 +454,10 @@ class CRD:
 
         return hgln * 180 / np.pi, hglt * 180 / np.pi
 
+    @deprecated
     def _dot(self, a, b):
-        """Vectorized version of the dot product of two arrays.
-
-        Wanted a dot product function that performed operations
-        element-wise.
-        """
-        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+        """Deprecated, used in measurement module."""
+        return (a[0] * b[0]) + (a[1] * b[1]) + (a[2] * b[2])
 
     def _spherical_to_cartesian(self, lon, lat, i, j):
         """Takes latitude, longitude arrays and returns cartesian unit vector.
@@ -466,6 +470,15 @@ class CRD:
         1, 0: bottom-left
         1, 1: bottom-right
         0, 1: top-right
+
+        Args:
+            lon (array): the longitude array
+            lat (array): the latitude array
+            i (float): the shift in x you want, usually either .5, 0, or -.5
+            j (float): the shift in y you want, usually either .5, 0, or -.5
+
+        Returns:
+            r (array): the resultant cartesian unit vector.
         """
         coslat = mnp.cos(lat)
         coslon = mnp.cos(lon)
@@ -481,6 +494,7 @@ class CRD:
         r[2] = z_ar
         return r
 
+    @deprecated
     def _get_instrument(self, mfits):
         """Deprecated"""
 
@@ -489,6 +503,7 @@ class CRD:
         else:
             return 0
 
+    @deprecated
     def _save_cache(self):
         """Deprecated"""
         mfits = fits.open(self.fn)
@@ -512,6 +527,7 @@ class CRD:
         mfits.writeto(new_fn, output_verify='ignore')
         mfits.close()
 
+    @deprecated
     def _load_cache(self):
         """Deprecated"""
         paths = os.path.splitdrive(self.fn.replace('.fits', '.CRD.fits'))
