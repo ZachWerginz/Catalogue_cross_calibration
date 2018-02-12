@@ -9,6 +9,7 @@ http://pythonhosted.org/uncertainties/
 
 That package was not chosen because of performance issues since it does all the correlation calculations using
 auto-differentiation and I do not.
+
 """
 
 import numpy as np
@@ -23,6 +24,7 @@ def cos(x):
 
     Returns:
         result: cos(x)
+
     """
     try:
         return Measurement(np.cos(x.v), np.abs(np.sin(x.v) * x.u))
@@ -38,6 +40,7 @@ def sin(x):
 
     Returns:
         result: sin(x)
+
     """
     try:
         return Measurement(np.sin(x.v), np.abs(np.cos(x.v) * x.u))
@@ -53,6 +56,7 @@ def arctan(x):
 
     Returns:
         result: arctan(x)
+
     """
     try:
         val = np.arctan(x.v)
@@ -70,6 +74,7 @@ def arctan2(x, y):
 
     Returns:
         result: arctan2(x)
+
     """
     try:
         val = np.arctan2(x.v, y.v)
@@ -88,6 +93,7 @@ def arcsin(x):
 
     Returns:
         result: arcsin(x)
+
     """
     try:
         val = np.arcsin(x.v)
@@ -105,6 +111,7 @@ def sqrt(x):
 
     Returns:
         result: sqrt(x)
+
     """
     try:
         return Measurement(np.sqrt(x.v), 0.5 * np.abs(x.u / np.sqrt(x.v)))
@@ -120,6 +127,7 @@ def deg2rad(x):
 
     Returns:
         result: x * pi/180
+
     """
     return x * np.pi / 180
 
@@ -134,6 +142,7 @@ def cross(a, b, axis=0):
 
     Returns:
         result: cross(a, b)
+
     """
     values_a = np.array([a[0].v, a[1].v, a[2].v])
     values_b = np.array([b[0].v, b[1].v, b[2].v])
@@ -157,6 +166,7 @@ def dot(a, b):
 
     Returns:
         result: dot(a, b) element-wise
+
     """
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
@@ -169,6 +179,7 @@ def nansum(array):
 
     Returns:
         result: np.nansum(array)
+
     """
     try:
         unc = 0
@@ -188,6 +199,7 @@ def nanmean(array):
 
     Returns:
         result: np.nanmean(array)
+
     """
     try:
         i = 0
@@ -214,6 +226,7 @@ def mean(array):
 
     Returns:
         result: np.mean(array)
+
     """
     try:
         i = 0
@@ -240,6 +253,7 @@ def isfinite(array):
 
     Returns:
         result: np.isfinite(array)
+
     """
     try:
         return np.isfinite(array.v)
@@ -255,6 +269,7 @@ def isnan(array):
 
     Returns:
         result: np.isnan(array)
+
     """
     try:
         return np.isnan(array.v)
@@ -270,6 +285,7 @@ def nanmax(array):
 
     Returns:
         result: np.nanmax(array)
+
     """
     try:
         return np.nanmax(array.v)
@@ -285,6 +301,7 @@ def nanmin(array):
 
     Returns:
         result: np.nanmin(array)
+
     """
     try:
         return np.nanmin(array.v)
@@ -301,6 +318,7 @@ def meshgrid(x_row, y_row):
 
     Returns:
         result: np.meshgrid(x_row, y_row)
+
     """
     xg = Measurement(0, 0)
     yg = Measurement(0, 0)
@@ -320,6 +338,7 @@ class Measurement:
           >>> a = mnp.Measurement(5, 3)
           >>> print(a)
           5 +/- 1
+
     """
     # Set array priority to override some of ndarray's ufunc binary relations
     __array_priority__ = 10000

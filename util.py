@@ -6,6 +6,7 @@ There are also functions to convert between data types like the integer mission 
 Attributes:
     data_root (str): This is the root level of where the fits files are being stored in.
     debug (bool): whether or not to show debugging messages
+
 """
 import datetime as dt
 import glob
@@ -59,32 +60,6 @@ def load_database():
     return conn
 
 
-def load_local_cc_data():
-    """Deprecated."""
-    file_names = {'ff24': '512_512_24.pkl',
-                  'ff48': '512_512_48.pkl',
-                  'fs48': '512_SPMG_48.pkl',
-                  'ss24': 'SPMG_SPMG_24.pkl',
-                  'sm1': 'SPMG_MDI_1.pkl',
-                  'sm24': 'SPMG_MDI_24.pkl',
-                  'mm1':  'MDI_MDI_1.pkl',
-                  'mm3': 'MDI_MDI_3.pkl',
-                  'mm12': 'MDI_MDI_12.pkl',
-                  'mm24': 'MDI_MDI_24.pkl',
-                  'mm36': 'MDI_MDI_36.pkl',
-                  'mm48': 'MDI_MDI_48.pkl',
-                  'mh1':  'MDI_HMI_1.pkl',
-                  'hh0': 'HMI_HMI_0.pkl',
-                  'hh24': 'HMI_HMI_24.pkl',
-                  'hh48': 'HMI_HMI_48.pkl'}
-    instrument_pairs = {}
-    for pair, name in file_names.items():
-        with open(name, 'rb') as f:
-            instrument_pairs[pair] = pickle.load(f)
-
-    return instrument_pairs
-
-
 def download_cc_data(i1, i2, n, tol1, tol2):
     """Downloads cross-calibration data from database for a given time interval and set of instruments.
 
@@ -96,7 +71,7 @@ def download_cc_data(i1, i2, n, tol1, tol2):
         tol2 (str): latest time difference between two magnetograms
 
     Returns:
-        result: dictionary of results in array form
+        dict: dictionary of results in array form
 
     Example:
         >>> r_25 = u.download_cc_data('spmg', 'spmg', 25, '23 hours', '25 hours')
@@ -162,24 +137,6 @@ def date_defaults(instr):
         raise ValueError('Unrecognized instrument')
 
 
-def get_header_date(f):
-    """Deprecated - used to try different keywords because things are inconsistent"""
-    hdulist = fits.open(f)
-    time = None
-
-    for hdu in hdulist:
-        try:
-            time = sunpy.time.parse_time(hdu.header['DATE_OBS'])
-        except KeyError:
-            try:
-                time = sunpy.time.parse_time(hdu.header['DATE-OBS'])
-            except KeyError:
-                time = sunpy.time.parse_time(hdu.header['T_OBS'])
-    hdulist.close()
-
-    return time
-
-
 def date2md(date, instr):
     """Converts a standard date string into an integer instrument mission date."""
     return date.toordinal() - date_offset(instr).toordinal()
@@ -188,30 +145,6 @@ def date2md(date, instr):
 def md2date(md, instr):
     """Converts an instrument mission date string into a standard date string."""
     return dt.datetime.fromordinal(md + date_offset(instr).toordinal())
-
-
-def crd_read(date, instr):
-    """Deprecated"""
-    if not isinstance(date, dt.datetime):
-        date = sunpy.time.parse_time(date)
-    try:
-        filename = search_file(date, instr)
-    except IOError:
-        return -1
-
-    print(filename)
-    
-    try:
-        mgnt = CRD(filename)
-    except ValueError:
-        return -1
-    mgnt.heliographic()    
-    mgnt.magnetic_flux()
-    mgnt.magnetic_flux(raw_field=True)
-    mgnt.date = mgnt.im_raw.date
-    mgnt.md = date2md(date, instr)
-
-    return mgnt
 
 
 def load_sim(fn):
@@ -229,7 +162,8 @@ def search_file(date, instr, auto=True):
         auto (bool): whether to autoselect a file from a group of similar files for one particular day
 
     Returns:
-        files: list of files or singular file
+        list: list of files or singular file
+
     """
     if not isinstance(date, dt.datetime):
         date = sunpy.time.parse_time(date)
@@ -285,7 +219,8 @@ def mdi_file_choose(f):
         f (list): list of MDI files
 
     Returns:
-        best: singular filepath for best magnetogram
+        str: singular filepath for best magnetogram
+
     """
     best = f[-1]    # default to last element
     ival = 0
@@ -331,6 +266,7 @@ def diff_rot(m1, m2):
 
     Returns:
         rotation: rotation array containing values to add to longitude
+
     """
     time_diff = u.Quantity(
             (m1.im_raw.date - m2.im_raw.date).total_seconds(), 'second')

@@ -5,6 +5,7 @@ with for cross calibration in an easy way.
 
 Todo:
     Get rid of the pixel thing and just make everything array-wide operations by now.
+
 """
 from __future__ import division
 
@@ -67,6 +68,7 @@ class CRD:
 
         Raises:
             IOError: if the fits file does not fit one the file specifications or the file does not exist
+
         """
         self.im_raw = sunpy.map.Map(filename)
         self.fn = filename
@@ -172,6 +174,7 @@ class CRD:
         Returns:
             lonh (np.array): heliographic longitude
             lath (np.array): heliographic latitude
+
         """
 
         if array and self.lonh is not None and not corners:
@@ -215,6 +218,7 @@ class CRD:
 
         Returns:
             calculation: the line-of-sight correction
+
         """
 
         if array and self.im_corr is not None:
@@ -265,6 +269,7 @@ class CRD:
 
         Returns:
             calculation: the area element for each pixel
+
         """
 
         if array and self.area is not None:
@@ -341,6 +346,7 @@ class CRD:
 
         Returns:
             object: the magnetic flux array
+
         """
         if not array:
             return self.eoa(*args) * self.los_corr(*args)
@@ -380,6 +386,7 @@ class CRD:
         Returns:
             xg: 2D array containing the x-coordinates of each pixel
             yg: 2D array containing the y-coordinates of each pixel
+
         """
         # Retrieve integer dimensions and create arrays holding
         # x and y coordinates of each pixel
@@ -417,6 +424,7 @@ class CRD:
             rx: x coordinate in meters
             ry: y coordinate in meters
             rz: z coordinate in meters
+
         """
         x *= np.deg2rad(1) / 3600.0
         y *= np.deg2rad(1) / 3600.0
@@ -445,6 +453,7 @@ class CRD:
         Returns:
             hgln (array): heliographic longitude
             hglt (array): heliographic latitute
+
         """
         cosb = mnp.cos(mnp.deg2rad(b0))
         sinb = mnp.sin(mnp.deg2rad(b0))
@@ -454,11 +463,6 @@ class CRD:
         hglt = mnp.arcsin((y * cosb + z * sinb) / hecr)
 
         return hgln * 180 / np.pi, hglt * 180 / np.pi
-
-    # @deprecated
-    # def _dot(self, a, b):
-    #     """Deprecated, used in measurement module."""
-    #     return (a[0] * b[0]) + (a[1] * b[1]) + (a[2] * b[2])
 
     def _spherical_to_cartesian(self, lon, lat, i, j):
         """Takes latitude, longitude arrays and returns cartesian unit vector.
@@ -480,6 +484,7 @@ class CRD:
 
         Returns:
             r (array): the resultant cartesian unit vector.
+
         """
         coslat = mnp.cos(lat)
         coslon = mnp.cos(lon)
@@ -494,51 +499,3 @@ class CRD:
         r[1] = y_ar
         r[2] = z_ar
         return r
-    #
-    # @deprecated
-    # def _get_instrument(self, mfits):
-    #     """Deprecated"""
-    #
-    #     if len(mfits[0].header) < 10:
-    #         return 1
-    #     else:
-    #         return 0
-    #
-    # @deprecated
-    # def _save_cache(self):
-    #     """Deprecated"""
-    #     mfits = fits.open(self.fn)
-    #     attr = [self.lonh, self.lath, self.area, self.im_corr]
-    #     units = ['deg', 'deg', 'cm^2', 'G', 'Mx']
-    #     x_name = ['LATITUDE', 'LONGITUDE', 'AREA', 'LOS CORRECTED FIELD']
-    #     for dataArray in attr:
-    #         mfits.append(fits.ImageHDU(np.array([dataArray.v.astype('float32'), dataArray.u.astype('float32')])))
-    #
-    #     j = self._get_instrument(mfits)
-    #     for i in range(1 + j, 5 + j):
-    #         mfits[i].header['DATE-OBS'] = self.im_raw.date.isoformat()
-    #         mfits[i].header['INSTRUME'] = self.im_raw.instrument
-    #         mfits[i].header['BUNIT'] = units[i - 1 - j]
-    #         mfits[i].header['EXTNAME'] = x_name[i - 1 - j]
-    #
-    #     fn = self.fn.replace('.fits', '.CRD.fits')
-    #     s = fn.split(':')
-    #     s[0] = s[0] + ':'
-    #     new_fn = os.path.join(s[0], 'CRD', s[-1])
-    #     mfits.writeto(new_fn, output_verify='ignore')
-    #     mfits.close()
-    #
-    # @deprecated
-    # def _load_cache(self):
-    #     """Deprecated"""
-    #     paths = os.path.splitdrive(self.fn.replace('.fits', '.CRD.fits'))
-    #     self.cached_fn = os.path.join(paths[0], 'CRD', paths[1])
-    #     mfits = fits.open(self.cached_fn)
-    #     i = self._get_instrument(mfits)
-    #     self.im_raw = sunpy.map.Map(mfits[i].data, mfits[i].header)
-    #     self.lonh = mnp.Measurement(mfits[i + 1].data[0], mfits[i + 1].data[1])
-    #     self.lath = mnp.Measurement(mfits[i + 2].data[0], mfits[i + 2].data[1])
-    #     self.area = mnp.Measurement(mfits[i + 3].data[0], mfits[i + 3].data[1])
-    #     self.im_corr = mnp.Measurement(mfits[i + 4].data[0], mfits[i + 4].data[1])
-    #     self.cached = True
-    #     mfits.close()
