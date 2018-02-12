@@ -1,23 +1,28 @@
-"""
-Provides the functions necessary for analyzing cross calibration
-between instruments.
+"""Provides the functions necessary for analyzing cross calibration between instruments.
+
+Attributes:
+    Pair (namedtuple): sort of a function definition to make sure MockCRD works with sunpy
+
 """
 import datetime as dt
-import getopt
 import itertools
 import random
-import sys
-import uncertainty.measurement as mnp
+from collections import namedtuple
+
+import astropy.units as units
 import numpy as np
 import psycopg2 as psy
 from scipy.interpolate import griddata
-from collections import namedtuple
+
 import quadrangles as quad
+import uncertainty.measurement as mnp
 import util as u
 from coord import CRD
-import astropy.units as units
-import matplotlib.pyplot as plt
 
+
+# import getopt
+# import sys
+# import matplotlib.pyplot as plt
 Pair = namedtuple('Pair', 'x y')
 
 psy.extensions.register_adapter(np.float32, psy._psycopg.AsIs)
@@ -27,113 +32,43 @@ DEC2FLOAT = psy.extensions.new_type(
     lambda value, curs: float(value) if value is not None else None)
 psy.extensions.register_type(DEC2FLOAT)
 
-__authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
+__authors__ = ["Zach Werginz", "Andrés Muñoz-Jaramillo"]
 __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
 
 
-i1 = None  # Instrument 1
-i2 = None  # Instrument 2
+def get_file_list(i1, i2, tol1, tol2):
+    """Returns a list of valid file combinations.
 
+    Searches for files within tol1 of each other as a lower bound or tol2 as an upper bound.
 
-def usage():
-    print('Usage: cross_calibration.py [-d data-root] [-f instrument 1] [-s instrument 2] [-t tolerance]')
+    Args:
+        i1 (str): reference instrument
+        i2 (str): secondary instrument
+        tol1 (str): minimum time difference between magnetograms
+        tol2 (str): maximum time difference between magnetograms
 
+    Returns:
+        list: list of filename pairs that satisfy the condition in tuple form (file1, file2)
 
-def process_date(i1, i2, date, timeTolerance=1):
-    """Inputs two instruments and returns unique list of dates for a date."""
-    fList1 = []
-    fList2 = []
-
-    #Include loop to include 24 hour time tolerance
-    for i in range(0 - timeTolerance, 1 + timeTolerance):
-        try:
-            f1 = u.search_file(date + dt.timedelta(i), i1, auto=False)
-            f2 = u.search_file(date, i2, auto=False)
-            if f1 == f2 and i1 != 'mdi' and i2 != 'mdi':
-                continue
-            else:
-                fList1.extend(f1)
-                fList2.extend(f2)
-        except IOError:
-            continue
-    result = list(set(itertools.product(fList1, fList2)))
-    result = [x for x in result if x[0] != x[1]]
-
-    if not result:
-        raise IOError
-
-    return result
-
-
-def process_instruments(i1, i2, par):
     """
-    Returns a list of valid file combinations.
-
-    Searches for files within 24 hours of each other between instruments.
-    This time default can be changed with the timeTolerance keyword.
-    If retDates is set to true, it will also return a list of dates where
-    matches were found.
-    """
-    tol1 = par['t1']
-    tol2 = par['t2']
-
-    instrumentKey = {'512': 1, 'SPMG': 2, 'MDI': 3, 'HMI': 4, 'SIM': 5, 'SIM2': 6}
+    instrument_key = {'512': 1, 'SPMG': 2, 'MDI': 3, 'HMI': 4, 'SIM': 5, 'SIM2': 6}
 
     conn = u.load_database()
     cur = conn.cursor()
     cur.execute("SELECT a.filepath AS f1, b.filepath AS f2 \
-            FROM file_time_diff main \
-            JOIN file a ON main.file1 = a.id \
-            JOIN file b ON main.file2 = b.id \
-            WHERE a.instrument = %s AND b.instrument = %s \
-            AND difference BETWEEN INTERVAL %s \
-            AND INTERVAL %s;", (instrumentKey[i1.upper()],
-            instrumentKey[i2.upper()], tol1, tol2))
+                FROM file_time_diff main \
+                JOIN file a ON main.file1 = a.id \
+                JOIN file b ON main.file2 = b.id \
+                WHERE a.instrument = %s AND b.instrument = %s \
+                AND difference BETWEEN INTERVAL %s \
+                AND INTERVAL %s;", (instrument_key[i1.upper()],
+                instrument_key[i2.upper()], tol1, tol2))
     
     results = cur.fetchall()
     cur.close()
     conn.close()
 
     return results
-
-
-def coordinate_compare(i1, i2):
-    """
-    Deprecated
-    """
-    filePairs = process_instruments(i1, i2)
-    pairInfo = {}
-    infoList = []
-
-    for pair in filePairs:
-        print(pair)
-
-    for pair in filePairs:
-        instr1 = CRD(pair[0])
-        instr2 = CRD(pair[1])
-        instr1.heliographic()
-        instr2.heliographic()
-        ind1 = np.where((instr1.lath < 30) & (instr1.lath > -30))
-        ind2 = np.where((instr2.lath < 30) & (instr2.lath > -30))
-        pairInfo['Instrument1'] = pair[0]
-        pairInfo['Instrument2'] = pair[1]
-        pairInfo['timeDelta'] = abs(instr1.im_raw.date - instr2.im_raw.date)
-        pairInfo['lonMax1'] = np.nanmax(instr1.lonh.v[ind1])
-        pairInfo['lonMin1'] = np.nanmin(instr1.lonh.v[ind1])
-        pairInfo['lonMax2'] = np.nanmax(instr2.lonh.v[ind2])
-        pairInfo['lonMin2'] = np.nanmin(instr2.lonh.v[ind2])
-        pairInfo['deltaLon1'] = pairInfo['lonMax1'] - pairInfo['lonMin1']
-        pairInfo['deltaLon2'] = pairInfo['lonMax2'] - pairInfo['lonMin2']
-        pairInfo['latMax1'] = np.nanmax(instr1.lath.v)
-        pairInfo['latMin1'] = np.nanmin(instr1.lath.v)
-        pairInfo['latMax2'] = np.nanmax(instr2.lath.v)
-        pairInfo['latMin2'] = np.nanmin(instr2.lath.v)
-        pairInfo['deltaLat1'] = pairInfo['latMax1'] - pairInfo['latMin1']
-        pairInfo['deltaLat2'] = pairInfo['latMax2'] - pairInfo['latMin2']
-        infoList.append(pairInfo.copy())
-        if len(infoList) > 100: break
-
-    return infoList
 
 
 def fix_longitude(f1, f2, raw_remap=False, downscale=False):
@@ -155,7 +90,7 @@ def fix_longitude(f1, f2, raw_remap=False, downscale=False):
     mgnt2.heliographic()
     mgnt1.magnetic_flux()
     mgnt2.magnetic_flux()
-    #Apply differential Rotation
+    # Apply differential Rotation
     if mgnt2.im_raw.dimensions[0].value > mgnt1.im_raw.dimensions[0].value and not downscale:
         rotation = u.diff_rot(mgnt2, mgnt1)
         mgnt1.lonhRot = mgnt1.lonh + rotation.value
@@ -215,19 +150,19 @@ def upload_quadrangles(conn, b, workingFiles, sim=False):
     cur = conn.cursor()
     if sim:
         try:
-            for quad in b:
-                if np.isnan(quad.fluxDensity) or np.isnan(quad.fluxDensity2):
+            for quadrangle in b:
+                if np.isnan(quadrangle.fluxDensity) or np.isnan(quadrangle.fluxDensity2):
                     continue
                 cur.execute("INSERT INTO quadrangle\
                     (referencemag, secondarymag, diskangle, area,\
                     referencefluxdensity, secondaryfluxdensity, fragmentationvalue)\
                     VALUES\
                     (%s, %s, %s, %s, %s, %s, %s)",
-                    (f1, f2, quad.diskAngle, quad.area,
-                    quad.fluxDensity, quad.fluxDensity2, quad.fragmentationValue))
+                    (f1, f2, quadrangle.diskAngle, quadrangle.area,
+                    quadrangle.fluxDensity, quadrangle.fluxDensity2, quadrangle.fragmentationValue))
 
             cur.execute("INSERT INTO uniquepairs\
-                    VALUES (%s, %s, %s)", (f1, f2, quad.fragmentationValue))
+                    VALUES (%s, %s, %s)", (f1, f2, quadrangle.fragmentationValue))
         except Exception as e:
             print("Could not upload completely to database.")
             conn.rollback()
@@ -235,19 +170,19 @@ def upload_quadrangles(conn, b, workingFiles, sim=False):
             return
     else:
         try:
-            for quad in b:
-                if np.isnan(quad.fluxDensity) or np.isnan(quad.fluxDensity2):
+            for quadrangle in b:
+                if np.isnan(quadrangle.fluxDensity) or np.isnan(quadrangle.fluxDensity2):
                     continue
                 cur.execute("INSERT INTO quadrangle\
                     (referencemag, secondarymag, diskangle, area,\
                     referencefluxdensity, secondaryfluxdensity, fragmentationvalue)\
                     VALUES\
                     (%s, %s, %s, %s, %s, %s, %s)",
-                    (f1, f2, np.float32(quad.diskAngle.v), quad.area.v,
-                    quad.fluxDensity, quad.fluxDensity2, quad.fragmentationValue))
+                    (f1, f2, np.float32(quadrangle.diskAngle.v), quadrangle.area.v,
+                    quadrangle.fluxDensity, quadrangle.fluxDensity2, quadrangle.fragmentationValue))
 
             cur.execute("INSERT INTO uniquepairs\
-                    VALUES (%s, %s, %s)", (f1, f2, quad.fragmentationValue))
+                    VALUES (%s, %s, %s)", (f1, f2, quadrangle.fragmentationValue))
         except Exception as e:
             print("Could not upload completely to database.")
             conn.rollback()
@@ -258,42 +193,48 @@ def upload_quadrangles(conn, b, workingFiles, sim=False):
     cur.close()
 
 
-def compare_day(i1, i2, par, filePair):
-    """
-    Fully autonomous magnetogram comparison function.
+def compare_day(i1, i2, n, files):
+    """Compare two magnetograms by fragmentation.
 
-    Can input two instruments for a random sampling of their matches.
-    If date is entered, it will compare magnetograms for that date.
-    f1 and f2 are filenames that bypass all of this
+    Args:
+        i1 (str): reference instrument
+        i2 (str): secondary instrument
+        n (int): fragmentation parameter - the level of fragmentation
+        files: a tuple of two filepaths to analyze
+
+    Returns:
+        list: list of quadrangle objects containing flux density information
+
     """
-    if filePair is not None:
-        files = filePair
-    else:
-        files = random.choice(process_instruments(i1, i2, par))
+
     try:
         m1, m2 = fix_longitude(files[0], files[1])
     except ValueError:
         raise
-    blocks_n = quad.fragment_multiple(m1, m2, par['n'])
+    blocks_n = quad.fragment_multiple(m1, m2, n)
 
     return blocks_n
 
 
-def get_instruments():
-    global i1, i2
-    i1 = input("Enter an instrument: ")
-    i2 = input("Enter a second instrument: ")
-
-
 def get_file_id(conn, files):
+    """Return file ids for filenames from database.
+
+    Args:
+        conn (obj): the psycopg2 connection object
+        files (tuple): tuple containing the filepaths
+
+    Returns:
+        tuple: tuple of id numbers for file
+
+    """
     cur = conn.cursor()
     cur.execute("SELECT id FROM file WHERE filepath = %s", (files[0],))
-    fileID1 = cur.fetchone()[0]
+    file_id1 = cur.fetchone()[0]
     cur.execute("SELECT id FROM file WHERE filepath = %s", (files[1],))
-    fileID2 = cur.fetchone()[0]
+    file_id2 = cur.fetchone()[0]
     cur.close()
 
-    return fileID1, fileID2
+    return file_id1, file_id2
 
 
 def sim_compare(fn1, fn2, rotate=0):
@@ -328,6 +269,88 @@ def sim_compare(fn1, fn2, rotate=0):
     return sim1, sim2
 
 
+def transform_blocks_to_dict(blocks, fragmentation_parameter):
+    """Transform a list of quadrangles into a dictionary with condensed information
+
+    Args:
+        blocks: the list of quadrangles containing flux and area information
+        fragmentation_parameter: the fragmentation parameter used to calculate blocks
+
+    Returns:
+        dict: a dictionary containing condensed arrays of quadrangle information
+
+    """
+    # check for nested list for multiple comparable days and flatten it if so
+    if any(isinstance(i, list) for i in blocks):
+        blocks = list(itertools.chain.from_iterable(blocks))
+    result = {'i1': blocks[0].i1, 'i2': blocks[0].i2, 'n': fragmentation_parameter}
+    reference_fd = []
+    secondary_fd = []
+    disk_angle = []
+    for quadrangle in blocks:
+        reference_fd.append(quadrangle.fluxDensity)
+        secondary_fd.append(quadrangle.fluxDensity2)
+        disk_angle.append(quadrangle.diskAngle)
+    result['referenceFD'] = np.array(reference_fd)
+    result['secondaryFD'] = np.array(secondary_fd)
+    result['diskAngle'] = np.array(disk_angle)
+
+    return result
+
+
+def analyze_random_sample(i1, i2, tol1, tol2, n=25, passes=1, upload=False):
+    """Compare random samples of magnetograms between tolerance limits.
+
+    This function will compare magnetograms from i1 and i2 that are between tol1 and tol2 time difference away from
+    each other. It will do this the specified number of passes and aggregate data.
+
+    Args:
+        i1 (str): reference instrument
+        i2 (str): secondary instrument
+        tol1 (str): minimum time difference between magnetograms
+        tol2 (str): maximum time difference between magnetograms
+        n (int, optional): fragmentation parameter, defaults to 25
+        passes (int, optional): number of pairs to compare, defaults to 1
+        upload (bool): choose to upload to database, defaults to False
+
+    Returns:
+        dict (optional): condensed summary dictionary of block information if not uploaded to database
+
+    """
+
+    file_matches = get_file_list(i1, i2, tol1, tol2)
+    conn = u.load_database()
+    blocks_list = []
+    i = 0
+    while True:
+        if i > passes:
+            break
+        try:
+            choice_int = int(random.random() * len(file_matches))
+            working_files = file_matches[choice_int]
+            file_ids = get_file_id(conn, working_files)
+            if upload:
+                cur = conn.cursor()
+                cur.execute("SELECT * FROM uniquepairs\
+                                    WHERE referencemag = %s \
+                                    AND secondarymag = %s\
+                                    AND fragmentationvalue = %s", (file_ids[0], file_ids[1], n))
+                if cur.fetchone() is not None:
+                    cur.close()
+                    continue
+                cur.close()
+                blocks = compare_day(i1, i2, n, working_files)
+                upload_quadrangles(conn, blocks, working_files)
+            else:
+                blocks_list.append(compare_day(i1, i2, n, working_files))
+            del file_matches[choice_int]  # So we don't hit it again
+        except ValueError:
+            continue
+        i += 1
+    if not upload:
+        return transform_blocks_to_dict(blocks_list, n)
+
+
 def main():
     """
     Main loop guiding the user though different cross calibration processing options.
@@ -357,7 +380,7 @@ def main():
             tol1 = input("Enter minimum time: ")
             tol2 = input("Enter maximum time: ")
             params = {'n': n, 't1': tol1, 't2': tol2}
-            fileMatches = process_instruments(i1, i2, params)
+            fileMatches = get_file_list(i1, i2, params)
             for i in range(min(len(fileMatches), passes)):
                 try:
                     choiceInt = int(random.random() * len(fileMatches))
@@ -389,7 +412,7 @@ def main():
             tol1 = input("Enter minimum time: ")
             tol2 = input("Enter maximum time: ")
             params = {'n': n, 't1': tol1, 't2': tol2}
-            fileMatches = process_instruments(i1, i2, params)
+            fileMatches = get_file_list(i1, i2, params)
             dayMatches = []
             i = 0
             while i < passes:
@@ -427,7 +450,7 @@ def main():
             tol1 = input("Enter minimum time: ")
             tol2 = input("Enter maximum time: ")
             params = {'n': n, 't1': tol1, 't2': tol2}
-            fileMatches = process_instruments(i1, i2, params)
+            fileMatches = get_file_list(i1, i2, params)
             i = 0
             while True:
                 if i > passes:
@@ -457,5 +480,5 @@ def main():
     return
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
