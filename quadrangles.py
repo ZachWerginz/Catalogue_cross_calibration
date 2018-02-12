@@ -221,16 +221,16 @@ def _transform_indices(ind, column_count, row_count):
 def extract_valid_points(bl):
     """Extracts the valid points from the dictionary set."""
 
-    flxD1 = bl['referenceFD']
-    flxD2 = bl['secondaryFD']
-    da = bl['diskangle']
+    flx_d1 = bl['reference_fd']
+    flx_d2 = bl['secondary_fd']
+    da = bl['disk_angle']
 
     # ind = np.where(np.logical_and( np.logical_or(np.abs(flxD1/flxD2) > 10, np.abs(flxD2/flxD1) > 10), (np.maximum(np.abs(flxD1),np.abs(flxD2)) > 15)))
     # flxD1[ind] = np.nan
     # flxD2[ind] = np.nan
     # da[ind] = np.nan
 
-    return flxD1, flxD2, da
+    return flx_d1, flx_d2, da
 
 
 def printInfo(str):

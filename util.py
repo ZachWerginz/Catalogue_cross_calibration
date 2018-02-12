@@ -106,9 +106,9 @@ def download_cc_data(i1, i2, n, tol1, tol2):
         da.extend([np.float32(s[2]) for s in points])
     cur.close()
 
-    result['referenceFD'] = np.array(x)
-    result['secondaryFD'] = np.array(y)
-    result['diskangle'] = np.array(da)
+    result['reference_fd'] = np.array(x)
+    result['secondary_fd'] = np.array(y)
+    result['disk_angle'] = np.array(da)
     result['i1'] = i1
     result['i2'] = i2
     result['n'] = n

@@ -19,10 +19,6 @@ import uncertainty.measurement as mnp
 import util as u
 from coord import CRD
 
-
-# import getopt
-# import sys
-# import matplotlib.pyplot as plt
 Pair = namedtuple('Pair', 'x y')
 
 psy.extensions.register_adapter(np.float32, psy._psycopg.AsIs)
@@ -291,9 +287,9 @@ def transform_blocks_to_dict(blocks, fragmentation_parameter):
         reference_fd.append(quadrangle.fluxDensity)
         secondary_fd.append(quadrangle.fluxDensity2)
         disk_angle.append(quadrangle.diskAngle)
-    result['referenceFD'] = np.array(reference_fd)
-    result['secondaryFD'] = np.array(secondary_fd)
-    result['diskAngle'] = np.array(disk_angle)
+    result['reference_fd'] = np.array(reference_fd)
+    result['secondary_fd'] = np.array(secondary_fd)
+    result['disk_angle'] = np.array(disk_angle)
 
     return result
 
