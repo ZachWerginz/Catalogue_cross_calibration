@@ -451,13 +451,13 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, **kwar
 
 
 def violin_plot(bl, dL, ax, clr='blue', alpha=.75, percentiles=[25, 75], corrections=False, **kwargs):
-    """Creates a box plot and sets properties."""
+    """Creates a violin plot and sets properties."""
     hl, x, y = hist_axis(bl, dL, **kwargs)
     y2 = np.array([t['med'] for t in hl])
     x2 = np.array([s['sliceMed'] for s in hl])
-    #ind = ((y2 > 0) & (x2 > 0)) | ((y2 < 0) & (x2 < 0))
-    y2 = y2[ind]
-    x2 = x2[ind]
+    ind = ((y > 0) & (x > 0)) | ((y < 0) & (x < 0))
+    y = y[ind]
+    x = x[ind]
     lim = max(np.max(np.abs(x2)), np.max(np.abs(y2)))*1.1
     dataset = [s['data'] for s in hl]
     p_data = [np.percentile(s, percentiles) for s in dataset]

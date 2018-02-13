@@ -8,6 +8,7 @@ Attributes:
     debug (bool): whether or not to show debugging messages
 
 """
+
 import datetime as dt
 import glob
 import os.path
@@ -79,7 +80,6 @@ def download_cc_data(i1, i2, n, tol1, tol2):
         {'diskangle': array([...]), 'i1': 'spmg', 'i2': 'spmg', 'n': 25, 'referenceFD': array([...]),
         'secondaryFD': array([...]), 'timeDifference': datetime.timedelta(1)}
     """
-
     conn = load_database()
     cur = conn.cursor("server_side")
     fetchlimit = 10000000

@@ -340,6 +340,7 @@ class Measurement:
           5 +/- 1
 
     """
+
     # Set array priority to override some of ndarray's ufunc binary relations
     __array_priority__ = 10000
 

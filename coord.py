@@ -7,6 +7,7 @@ Todo:
     Get rid of the pixel thing and just make everything array-wide operations by now.
 
 """
+
 from __future__ import division
 
 import os.path
@@ -176,7 +177,6 @@ class CRD:
             lath (np.array): heliographic latitude
 
         """
-
         if array and self.lonh is not None and not corners:
             return
 
@@ -220,7 +220,6 @@ class CRD:
             calculation: the line-of-sight correction
 
         """
-
         if array and self.im_corr is not None:
             return
         elif array:
@@ -271,7 +270,6 @@ class CRD:
             calculation: the area element for each pixel
 
         """
-
         if array and self.area is not None:
             return
         if array:

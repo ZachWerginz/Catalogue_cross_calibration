@@ -87,7 +87,7 @@ def create_sim_variable_times():
     edges = np.arange(-987.5, 987.5, 25)
 
     for file, ax in zip(files[1:], grid.flatten()):
-        m1, m2 = c.sim_compare(files[0], file)
+        m1, m2 = c.prepare_simulation(files[0], file)
         x = m2.remap.ravel()
         y = m1.im_corr.v.ravel()
         ind = (np.abs(x) > cond) * (np.abs(y) > cond) * np.isfinite(x) * np.isfinite(y)
@@ -131,7 +131,7 @@ def create_variable_time_plot(instr):
     edges = np.arange(-987.5, 987.5, 25)
 
     for file, ax in zip(files[1:], grid.flatten()):
-        m1, m2 = c.fix_longitude(files[0], file)
+        m1, m2 = c.prepare_magnetograms(files[0], file)
         x = m2.remap.ravel()
         y = m1.im_corr.v.ravel()
         ind = (np.abs(x) > cond) * (np.abs(y) > cond) * np.isfinite(x) * np.isfinite(y)

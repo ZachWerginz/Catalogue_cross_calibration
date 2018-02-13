@@ -4,6 +4,7 @@ Attributes:
     Pair (namedtuple): sort of a function definition to make sure MockCRD works with sunpy
 
 """
+
 import datetime as dt
 import itertools
 import random
@@ -58,8 +59,8 @@ def get_file_list(i1, i2, tol1, tol2):
                 WHERE a.instrument = %s AND b.instrument = %s \
                 AND difference BETWEEN INTERVAL %s \
                 AND INTERVAL %s;", (instrument_key[i1.upper()],
-                instrument_key[i2.upper()], tol1, tol2))
-    
+                                    instrument_key[i2.upper()], tol1, tol2))
+
     results = cur.fetchall()
     cur.close()
     conn.close()
@@ -67,15 +68,21 @@ def get_file_list(i1, i2, tol1, tol2):
     return results
 
 
-def fix_longitude(f1, f2, raw_remap=False, downscale=False):
-    """
-    Will shift the longitude of second magnetogram to match the first.
+def prepare_magnetograms(f1, f2, raw_remap=False, downscale=False):
+    """Calculate heliographic information and apply differential rotation.
 
-    Uses differential rotation to update the second magnetogram's longitude.
-    Then, afterwards it will shift the longitudes to match the first,
-    considering they will only be off by some constant.
-    """
+    The standard is to interpolate the smaller resolution magnetogram into the larger one unless downscale is chosen.
 
+    Args:
+        f1 (str): the first file
+        f2 (str): the second file
+        raw_remap (bool): defaults to False, uses raw flux density instead of corrected one
+        downscale (bool): defaults to False, will downscale larger resolution to smaller one
+
+    Returns:
+        object: returns m1 and m2 as a tuple with rotations applied
+
+    """
     print(f1)
     print(f2)
     mgnt1 = CRD(f1)
@@ -100,6 +107,14 @@ def fix_longitude(f1, f2, raw_remap=False, downscale=False):
 
 
 def interpolate_remap(m1, m2, raw=False):
+    """Perform interpolation of m2 into coordinate system of m1.
+
+    Args:
+        m1 (obj): reference magnetogram
+        m2 (obj): secondary magnetogram
+        raw (bool): defaults to False, toggles use of corrected flux density
+
+    """
     if raw:
         v2 = m2.im_raw.data.flatten()
     else:
@@ -111,54 +126,58 @@ def interpolate_remap(m1, m2, raw=False):
     y1 = m1.lath.v.flatten()
     dim1 = m1.im_raw.dimensions
 
-    latitudeMask2 = np.where(np.abs(y2) < 50)
-    latitudeMask1 = np.where(np.abs(y1) < 50)
-    minimum = max(np.nanmin(x2[latitudeMask2]), np.nanmin(x1[latitudeMask1]))
-    maximum = min(np.nanmax(x2[latitudeMask2]), np.nanmax(x1[latitudeMask1]))
+    latitude_mask2 = np.where(np.abs(y2) < 50)
+    latitude_mask1 = np.where(np.abs(y1) < 50)
+    minimum = max(np.nanmin(x2[latitude_mask2]), np.nanmin(x1[latitude_mask1]))
+    maximum = min(np.nanmax(x2[latitude_mask2]), np.nanmax(x1[latitude_mask1]))
 
     ind2 = (np.isfinite(x2) * np.isfinite(y2) * np.isfinite(v2) * (x2 > minimum) * (x2 < maximum))
     ind1 = (np.isfinite(x1) * np.isfinite(y1) * (x1 > minimum) * (x1 < maximum))
 
-    interp_data = griddata((x2[ind2], y2[ind2]), v2[ind2], (x1[ind1], y1[ind1]), method='cubic')
+    interp_data = griddata(np.array(x2[ind2], y2[ind2]), v2[ind2], (x1[ind1], y1[ind1]), method='cubic')
     new_m2 = np.full((int(dim1[0].value), int(dim1[1].value)), np.nan)
 
     new_m2.ravel()[ind1] = interp_data
-    new_m2[m1.rg > m1.par['rsun']*np.sin(75.0*np.pi/180)] = np.nan
+    new_m2[m1.rg > m1.par['rsun'] * np.sin(75.0 * np.pi / 180)] = np.nan
 
     m2.remap = new_m2
 
 
-def run_multiple_n(m):
+def run_multiple_n(mgnt):
     """Takes mgnt and returns list of different fragmented quadrangles."""
-    nList = [i for i in range(10, 3100, 100)]
+    n_list = [i for i in range(10, 3100, 100)]
 
     n_dict_length = {}
 
-    for n in nList:
-        N = quad.fragment_single(m, n)
-        n_dict_length[n] = len(N)
+    for n in n_list:
+        num_blocks = quad.fragment_single(m, n)
+        n_dict_length[n] = len(num_blocks)
     return n_dict_length
 
 
-def upload_quadrangles(conn, b, workingFiles, sim=False):
-    f1, f2 = get_file_id(conn, workingFiles)
-    print(f1, f2)
+def upload_quadrangles(conn, b, working_files, sim=False):
+    """Upload the fragmentation information to the postgres database.
+
+    Args:
+        conn (obj): psycopg2 connection object
+        b (list): the list of qudrangles to upload
+        working_files (tuple): the set of files the comparison was done on
+        sim (bool): defaults to False, will use different keywords if True
+
+    """
+    f1, f2 = get_file_id(conn, working_files)
     cur = conn.cursor()
     if sim:
         try:
             for quadrangle in b:
                 if np.isnan(quadrangle.fluxDensity) or np.isnan(quadrangle.fluxDensity2):
                     continue
-                cur.execute("INSERT INTO quadrangle\
-                    (referencemag, secondarymag, diskangle, area,\
-                    referencefluxdensity, secondaryfluxdensity, fragmentationvalue)\
-                    VALUES\
-                    (%s, %s, %s, %s, %s, %s, %s)",
-                    (f1, f2, quadrangle.diskAngle, quadrangle.area,
-                    quadrangle.fluxDensity, quadrangle.fluxDensity2, quadrangle.fragmentationValue))
+                cur.execute("INSERT INTO quadrangle (referencemag, secondarymag, diskangle, area,\
+                            referencefluxdensity, secondaryfluxdensity, fragmentationvalue)\
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)", (f1, f2, quadrangle.diskAngle, quadrangle.area,
+                            quadrangle.fluxDensity, quadrangle.fluxDensity2, quadrangle.fragmentationValue))
 
-            cur.execute("INSERT INTO uniquepairs\
-                    VALUES (%s, %s, %s)", (f1, f2, quadrangle.fragmentationValue))
+            cur.execute("INSERT INTO uniquepairs VALUES (%s, %s, %s)", (f1, f2, b[0].fragmentationValue))
         except Exception as e:
             print("Could not upload completely to database.")
             conn.rollback()
@@ -169,47 +188,44 @@ def upload_quadrangles(conn, b, workingFiles, sim=False):
             for quadrangle in b:
                 if np.isnan(quadrangle.fluxDensity) or np.isnan(quadrangle.fluxDensity2):
                     continue
-                cur.execute("INSERT INTO quadrangle\
-                    (referencemag, secondarymag, diskangle, area,\
-                    referencefluxdensity, secondaryfluxdensity, fragmentationvalue)\
-                    VALUES\
-                    (%s, %s, %s, %s, %s, %s, %s)",
-                    (f1, f2, np.float32(quadrangle.diskAngle.v), quadrangle.area.v,
-                    quadrangle.fluxDensity, quadrangle.fluxDensity2, quadrangle.fragmentationValue))
+                cur.execute("INSERT INTO quadrangle (referencemag, secondarymag, diskangle, area,\
+                            referencefluxdensity, secondaryfluxdensity, fragmentationvalue) VALUES "
+                            "(%s, %s, %s, %s, %s, %s, %s)", (f1, f2, np.float32(quadrangle.diskAngle.v),
+                                                             quadrangle.area.v, quadrangle.fluxDensity, quadrangle.
+                                                             fluxDensity2, quadrangle.fragmentationValue))
 
-            cur.execute("INSERT INTO uniquepairs\
-                    VALUES (%s, %s, %s)", (f1, f2, quadrangle.fragmentationValue))
+            cur.execute("INSERT INTO uniquepairs VALUES (%s, %s, %s)", (f1, f2, b[0].fragmentationValue))
         except Exception as e:
             print("Could not upload completely to database.")
             conn.rollback()
             cur.close()
             return
-       
+
     conn.commit()
     cur.close()
 
 
-def compare_day(i1, i2, n, files):
-    """Compare two magnetograms by fragmentation.
-
-    Args:
-        i1 (str): reference instrument
-        i2 (str): secondary instrument
-        n (int): fragmentation parameter - the level of fragmentation
-        files: a tuple of two filepaths to analyze
-
-    Returns:
-        list: list of quadrangle objects containing flux density information
-
-    """
-
-    try:
-        m1, m2 = fix_longitude(files[0], files[1])
-    except ValueError:
-        raise
-    blocks_n = quad.fragment_multiple(m1, m2, n)
-
-    return blocks_n
+# def compare_day(i1, i2, n, files):
+#     """Compare two magnetograms by fragmentation.
+#
+#     Args:
+#         i1 (str): reference instrument
+#         i2 (str): secondary instrument
+#         n (int): fragmentation parameter - the level of fragmentation
+#         files: a tuple of two filepaths to analyze
+#
+#     Returns:
+#         list: list of quadrangle objects containing flux density information
+#
+#     """
+#
+#     try:
+#         m1, m2 = prepare_magnetograms(files[0], files[1])
+#     except ValueError:
+#         raise
+#     blocks_n = quad.fragment_multiple(m1, m2, n)
+#
+#     return blocks_n
 
 
 def get_file_id(conn, files):
@@ -233,17 +249,33 @@ def get_file_id(conn, files):
     return file_id1, file_id2
 
 
-def sim_compare(fn1, fn2, rotate=0):
+def prepare_simulation(fn1, fn2):
+    """Prepares two simulation maps for processing and return them.
+
+    Args:
+        fn1 (str): filename of reference magnetogram
+        fn2 (str): filename of secondary magnetogram
+
+    Returns:
+        object: returns sim1 and sim2 prepared for fragmentation
+
+    """
     class MockCRD:
+        """Used as a class to replicate what CRD does temporarily."""
+
         def __init__(self, filename):
             class Im:
+                """Quick class to replicate what CRD does temporarily."""
+
                 pass
+
             self.im_raw = Im()
             self.im_raw.data = u.load_sim(filename)
-            self.im_raw.dimensions = Pair(*self.im_raw.data.shape*units.pixel)
+            self.im_raw.dimensions = Pair(*self.im_raw.data.shape * units.pixel)
             self.im_raw.instrument = 'SIM'
-            self.im_raw.date = dt.datetime.strptime((filename.split('.')[0].split('\\')[-1] + filename.split('.')[1]), '%Y%m%d%H')
-            self.im_corr = mnp.Measurement(self.im_raw.data, self.im_raw.data*0)
+            self.im_raw.date = dt.datetime.strptime((filename.split('.')[0].split('\\')[-1] + filename.split('.')[1]),
+                                                    '%Y%m%d%H')
+            self.im_corr = mnp.Measurement(self.im_raw.data, self.im_raw.data * 0)
             lat_space = np.linspace(90, -90, self.im_raw.data.shape[0] + 2)
             lon_space = np.linspace(-180, 180, self.im_raw.data.shape[1] + 2)
             self.lath, self.lonh = np.meshgrid(lat_space[1:-1], lon_space[1:-1], indexing='ij')
@@ -294,6 +326,29 @@ def transform_blocks_to_dict(blocks, fragmentation_parameter):
     return result
 
 
+def compare_day(i1, i2, file1, file2, n):
+    """Compare two days and return a list of quadrangles containing flux density information.
+
+    Args:
+        i1 (str): reference instrument
+        i2 (str): secondary instrument
+        file1 (str): filepath of reference magnetogram
+        file2 (str): filepath of secondary magnetogram
+        n (int): fragmentation parameter
+
+    Returns:
+        list: list of quadrangles for the fragmentation
+    """
+    if 'sim' in i1 or 'sim' in i2:
+        m1, m2 = prepare_simulation(file1, file2)
+    else:
+        m1, m2 = prepare_magnetograms(file1, file2)
+
+    blocks = quad.fragment_multiple(m1, m2, n)
+
+    return blocks
+
+
 def analyze_random_sample(i1, i2, tol1, tol2, n=25, passes=1, upload=False):
     """Compare random samples of magnetograms between tolerance limits.
 
@@ -313,7 +368,6 @@ def analyze_random_sample(i1, i2, tol1, tol2, n=25, passes=1, upload=False):
         dict (optional): condensed summary dictionary of block information if not uploaded to database
 
     """
-
     file_matches = get_file_list(i1, i2, tol1, tol2)
     conn = u.load_database()
     blocks_list = []
@@ -335,10 +389,11 @@ def analyze_random_sample(i1, i2, tol1, tol2, n=25, passes=1, upload=False):
                     cur.close()
                     continue
                 cur.close()
-                blocks = compare_day(i1, i2, n, working_files)
+                blocks = compare_day(i1, i2, working_files[0], working_files[1], n)
                 upload_quadrangles(conn, blocks, working_files)
             else:
-                blocks_list.append(compare_day(i1, i2, n, working_files))
+                blocks = compare_day(i1, i2, working_files[0], working_files[1], n)
+                blocks_list.append(blocks)
             del file_matches[choice_int]  # So we don't hit it again
         except ValueError:
             continue
@@ -367,36 +422,36 @@ def main():
         option = input("Choose a function: (r)andom [num], (s)elect date, switch (i)nstruments, (e)xit: ")
         if option == 'i':
             get_instruments()
-        elif 'rsim' in option:
-            try:
-                passes = int(option.split()[-1])
-            except ValueError:
-                passes = 1
-            n = int(input("Enter segmentation level: "))
-            tol1 = input("Enter minimum time: ")
-            tol2 = input("Enter maximum time: ")
-            params = {'n': n, 't1': tol1, 't2': tol2}
-            fileMatches = get_file_list(i1, i2, params)
-            for i in range(min(len(fileMatches), passes)):
-                try:
-                    choiceInt = int(random.random() * len(fileMatches))
-                    workingFiles = fileMatches[choiceInt]
-                    fileIDs = get_file_id(conn, workingFiles)
-                    cur = conn.cursor()
-                    cur.execute("SELECT * FROM uniquepairs\
-                             WHERE referencemag = %s \
-                             AND secondarymag = %s\
-                             AND fragmentationvalue = %s", (fileIDs[0], fileIDs[1], n))
-                    if cur.fetchone() is not None:
-                        cur.close()
-                        continue
-                    cur.close()
-                    sim1, sim2 = sim_compare(workingFiles[0], workingFiles[1])
-                    b = quad.fragment_multiple(sim1, sim2, params['n'])
-                    del fileMatches[choiceInt]  # So we don't hit it again
-                except ValueError:
-                    continue
-                upload_quadrangles(conn, b, workingFiles, sim=True)
+        # elif 'rsim' in option:
+        #     try:
+        #         passes = int(option.split()[-1])
+        #     except ValueError:
+        #         passes = 1
+        #     n = int(input("Enter segmentation level: "))
+        #     tol1 = input("Enter minimum time: ")
+        #     tol2 = input("Enter maximum time: ")
+        #     params = {'n': n, 't1': tol1, 't2': tol2}
+        #     fileMatches = get_file_list(i1, i2, params)
+        #     for i in range(min(len(fileMatches), passes)):
+        #         try:
+        #             choiceInt = int(random.random() * len(fileMatches))
+        #             workingFiles = fileMatches[choiceInt]
+        #             fileIDs = get_file_id(conn, workingFiles)
+        #             cur = conn.cursor()
+        #             cur.execute("SELECT * FROM uniquepairs\
+        #                      WHERE referencemag = %s \
+        #                      AND secondarymag = %s\
+        #                      AND fragmentationvalue = %s", (fileIDs[0], fileIDs[1], n))
+        #             if cur.fetchone() is not None:
+        #                 cur.close()
+        #                 continue
+        #             cur.close()
+        #             sim1, sim2 = prepare_simulation(workingFiles[0], workingFiles[1])
+        #             b = quad.fragment_multiple(sim1, sim2, params['n'])
+        #             del fileMatches[choiceInt]  # So we don't hit it again
+        #         except ValueError:
+        #             continue
+        #         upload_quadrangles(conn, b, workingFiles, sim=True)
 
         elif 'rs' in option:
             """Special option for only selecting unique days, not pairs"""
@@ -413,7 +468,7 @@ def main():
             i = 0
             while i < passes:
                 try:
-                    choiceInt = int(random.random()*len(fileMatches))
+                    choiceInt = int(random.random() * len(fileMatches))
                     workingFiles = fileMatches[choiceInt]
                     fileIDs = get_file_id(conn, workingFiles)
                     cur = conn.cursor()
@@ -430,51 +485,50 @@ def main():
                     dayMatches.append((cur.fetchone()[0].toordinal(), cur.fetchone()[0].toordinal()))
                     cur.close()
                     b = compare_day(i1, i2, params, workingFiles)
-                    del fileMatches[choiceInt] #So we don't hit it again
+                    del fileMatches[choiceInt]  # So we don't hit it again
                 except ValueError:
                     continue
                 upload_quadrangles(conn, b, workingFiles)
                 i += 1
 
-        elif 'r' in option:
-            print('Random fetch')
-            try:
-                passes = int(option.split()[-1])
-            except ValueError:
-                passes = 1
-            n = int(input("Enter segmentation level: "))
-            tol1 = input("Enter minimum time: ")
-            tol2 = input("Enter maximum time: ")
-            params = {'n': n, 't1': tol1, 't2': tol2}
-            fileMatches = get_file_list(i1, i2, params)
-            i = 0
-            while True:
-                if i > passes:
-                    break
-                try:
-                    choiceInt = int(random.random()*len(fileMatches))
-                    workingFiles = fileMatches[choiceInt]
-                    fileIDs = get_file_id(conn, workingFiles)
-                    cur = conn.cursor()
-                    cur.execute("SELECT * FROM uniquepairs\
-                            WHERE referencemag = %s \
-                            AND secondarymag = %s\
-                            AND fragmentationvalue = %s", (fileIDs[0], fileIDs[1], n))
-                    if cur.fetchone() is not None:
-                        cur.close()
-                        continue
-                    cur.close()
-                    b = compare_day(i1, i2, params, workingFiles)
-                    del fileMatches[choiceInt] #So we don't hit it again
-                except ValueError:
-                    continue
-                upload_quadrangles(conn, b, workingFiles)
-                i += 1
-
-        elif 'e' in option:
-            break
+        # elif 'r' in option:
+        #     print('Random fetch')
+        #     try:
+        #         passes = int(option.split()[-1])
+        #     except ValueError:
+        #         passes = 1
+        #     n = int(input("Enter segmentation level: "))
+        #     tol1 = input("Enter minimum time: ")
+        #     tol2 = input("Enter maximum time: ")
+        #     params = {'n': n, 't1': tol1, 't2': tol2}
+        #     fileMatches = get_file_list(i1, i2, params)
+        #     i = 0
+        #     while True:
+        #         if i > passes:
+        #             break
+        #         try:
+        #             choiceInt = int(random.random() * len(fileMatches))
+        #             workingFiles = fileMatches[choiceInt]
+        #             fileIDs = get_file_id(conn, workingFiles)
+        #             cur = conn.cursor()
+        #             cur.execute("SELECT * FROM uniquepairs\
+        #                     WHERE referencemag = %s \
+        #                     AND secondarymag = %s\
+        #                     AND fragmentationvalue = %s", (fileIDs[0], fileIDs[1], n))
+        #             if cur.fetchone() is not None:
+        #                 cur.close()
+        #                 continue
+        #             cur.close()
+        #             b = compare_day(i1, i2, params, workingFiles)
+        #             del fileMatches[choiceInt]  # So we don't hit it again
+        #         except ValueError:
+        #             continue
+        #         upload_quadrangles(conn, b, workingFiles)
+        #         i += 1
+        #
+        # elif 'e' in option:
+        #     break
     return
-
 
 # if __name__ == "__main__":
 #     main()

@@ -31,9 +31,9 @@ def data(raw_remap=False):
     f2 = "test_mgnts\spmg_eo100_C1_19920425_1540.fits"
 
     if raw_remap:
-        m1, m2 = c.fix_longitude(f1, f2, raw_remap=True)
+        m1, m2 = c.prepare_magnetograms(f1, f2, raw_remap=True)
     else:
-        m1, m2 = c.fix_longitude(f1, f2)
+        m1, m2 = c.prepare_magnetograms(f1, f2)
     return m1, m2
 
 def block_plot(m1, m2, blocks, ax1, ax2):

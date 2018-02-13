@@ -32,7 +32,7 @@ def data(raw_remap=False):
     f1 = "test_mgnts/spmg_eo100_C1_19920424_1430.fits"
     f2 = "test_mgnts/spmg_eo100_C1_19920425_1540.fits"
 
-    m1, m2 = c.fix_longitude(f1, f2, raw_remap=True)
+    m1, m2 = c.prepare_magnetograms(f1, f2, raw_remap=True)
     return m1, m2
 
 
