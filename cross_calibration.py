@@ -299,6 +299,7 @@ def transform_blocks_to_dict(blocks, fragmentation_parameter):
     result['reference_fd'] = np.array(reference_fd)
     result['secondary_fd'] = np.array(secondary_fd)
     result['disk_angle'] = np.array(disk_angle)
+    result['time_difference'] = (blocks[0].date2 - blocks[0].date1) / 2
 
     return result
 
