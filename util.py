@@ -117,7 +117,7 @@ def download_cc_data(i1, i2, n, tol1, tol2):
     cur.execute("SELECT (INTERVAL %s)*SIGN(EXTRACT(epoch from INTERVAL %s)) + \
                 (INTERVAL %s)*SIGN(EXTRACT(epoch from INTERVAL %s))",
                 (tol2, tol2, tol1, tol1))
-    result['timeDifference'] = cur.fetchone()[0]/2
+    result['time_difference'] = cur.fetchone()[0]/2
     cur.close()
 
     return result

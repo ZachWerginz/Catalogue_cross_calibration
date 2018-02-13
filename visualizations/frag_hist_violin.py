@@ -20,45 +20,21 @@ import visualizations.cc_plot as ccplot
 
 
 def data(raw_remap=False):
-    """Loads sample data into memory.
+    """Load sample data into memory and prepare it for fragmentation.
 
     Args:
-        raw_remap (bool): select True if you want raw field instead of line-of-sight correction
+        raw_remap (bool): defaults to False, uses raw fiels instead of corrected
 
     Returns:
-        m1: The first magnetogram CRD object.
-        m2: The second magnetogram CRD object.
+        m1: reference magnetogram CRD object
+        m2: secondary magnetogram CRD object
+
     """
     f1 = "test_mgnts/spmg_eo100_C1_19920424_1430.fits"
     f2 = "test_mgnts/spmg_eo100_C1_19920425_1540.fits"
 
-    m1, m2 = c.prepare_magnetograms(f1, f2, raw_remap=True)
+    m1, m2 = c.prepare_magnetograms(f1, f2, raw_remap)
     return m1, m2
-
-
-def add_identity(axes, *line_args, **line_kwargs):
-    """Adds the identity line to a plot (y=x).
-
-    Args:
-        axes (obj): matplotlib axes object for which to add the identity line to
-        *line_args: additional line arguments
-        **line_kwargs: additional line keywords
-    """
-    identity, = axes.plot([], [], *line_args, **line_kwargs)
-
-    def callback(ax):
-        """Provides the mechanism for recalculating the identity line if the plot is resized.
-
-        :param obj ax: axis that is being resized
-        """
-        low_x, high_x = ax.get_xlim()
-        low_y, high_y = ax.get_ylim()
-        low = max(low_x, low_y)
-        high = min(high_x, high_y)
-        identity.set_data([low, high], [low, high])
-    callback(axes)
-    axes.callbacks.connect('xlim_changed', callback)
-    axes.callbacks.connect('ylim_changed', callback)
 
 
 def block_plot(m1, blocks, ax1):
@@ -68,6 +44,7 @@ def block_plot(m1, blocks, ax1):
         m1 (obj): CRD object who's image data will be shown
         blocks (list): list of quadrangles to be plotted as blocks
         ax1 (obj): matplotlib axis object to plot on
+
     """
     im1 = m1.lonh.v.copy()
     im1[:] = np.nan
@@ -78,15 +55,15 @@ def block_plot(m1, blocks, ax1):
     ax1.imshow(im1, vmin=0, vmax=1, alpha=.4, cmap='jet', zorder=2)
 
 
-def hexbin(points, ax):
-    """Plots a hexbin of the points on a given axis.
+def hist2d(points, ax):
+    """Plots a hist2d of the points on a given axis.
 
     Args:
         points (dict): a list of quadrangles containing magnetic info
         ax (obj): matplotlib axis to plot on
 
     Returns:
-        hb: the hexbin axis
+        hb: the hist2d axis
     """
     y, x, da = temp_q.extract_valid_points(points)
 
@@ -106,10 +83,10 @@ def hexbin(points, ax):
     ymax = np.nanmax(f_i1)
     lim = min(abs(xmin), abs(xmax), abs(ymin), abs(ymax))
 
-    hb = ax.hexbin(f_i2, f_i1, cmap=co, bins='log', gridsize=100, zorder=1)
+    hb = ax.hist2d(f_i2, f_i1, cmap=co, bins='log', gridsize=100, zorder=1)
 
     # ------------- Set Plot Properties ----------------------------
-    add_identity(ax, color='.3', ls='-', zorder=1)
+    ccplot.add_identity(ax, color='.3', ls='-', zorder=1)
     ax.axis([-lim, lim, -lim, lim])
     ax.set(adjustable='box-forced', aspect='equal')
 
@@ -117,13 +94,13 @@ def hexbin(points, ax):
 
 
 def plot_row(f, m1, blocks, results):
-    """Plots three axes on a figure - the fragmentation, a hexbin plot, and a violin plot.
+    """Plots three axes on a figure - the fragmentation, a hist2d plot, and a violin plot.
 
     Args:
         f (obj): figure to plot on
         m1 (obj): CRD object who's image data will be shown
         blocks (list): list of quadrangles to show fragmentation
-        results (dict): points to provide for the hexbin
+        results (dict): points to provide for the hist2d
     """
     f.subplots_adjust(left=.1, right=.9, wspace=0)
     ax1 = f.add_subplot(131, projection=m1.im_raw.wcs)
@@ -133,7 +110,7 @@ def plot_row(f, m1, blocks, results):
     color = (81 / 255, 178 / 255, 76 / 255)
 
     block_plot(m1, blocks, ax1)
-    hb = hexbin(results, ax2)
+    hb = hist2d(results, ax2)
     ccplot.violin_plot(results, [0, 70], ax3, alpha=.4, percentiles=[0, 100], clr=color, corrections=False)
     ccplot.violin_plot(results, [0, 70], ax3, alpha=.5, percentiles=[25, 75], clr=color, corrections=False)
     ccplot.violin_plot(results, [0, 70], ax3, alpha=.75, percentiles=[37.5, 62.5], clr=color, corrections=False)

@@ -1,32 +1,51 @@
+"""This module provides plotting support for the objects and data structures defined in cross_calibration.py
+
+Plots included are violin plots, box plots, scatter plots, and old, deprecated plots we used for analysis we don't do
+anymore.
+"""
+
+from itertools import cycle
+
+import matplotlib
+import matplotlib.cm as cm
+import matplotlib.colors as colors
+import matplotlib.lines as mlines
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.colors as colors
-import matplotlib.cm as cm
-import matplotlib.lines as mlines
-import matplotlib
+import scipy
+from matplotlib.ticker import MaxNLocator
 from scipy.optimize import curve_fit
 from scipy.stats import gaussian_kde
-import scipy
-from itertools import cycle
-import quadrangles as quad
-from matplotlib.ticker import MaxNLocator
 
-__authors__ = ["Zach Werginz", "Andres Munoz-Jaramillo"]
+import quadrangles as quad
+
+__authors__ = ["Zach Werginz", "Andrés Muñoz-Jaramillo"]
 __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
 
 matplotlib.rcParams.update({'font.size': 22})
 
 
 def add_identity(axes, *line_args, **line_kwargs):
-    """Plots the identity line on the specified axis."""
+    """Adds the identity line to a plot (y=x).
+
+    Args:
+        axes (obj): matplotlib axes object for which to add the identity line to
+        *line_args: additional line arguments
+        **line_kwargs: additional line keywords
+    """
     identity, = axes.plot([], [], *line_args, **line_kwargs)
 
-    def callback(axes):
-        low_x, high_x = axes.get_xlim()
-        low_y, high_y = axes.get_ylim()
-        low = max(low_x, low_y)
-        high = min(high_x, high_y)
+    def callback(ax):
+        """Provides the mechanism for recalculating the identity line if the plot is resized.
+
+        ax (obj): axis that is being resized
+
+        """
+        low_x, high_x = ax.get_xlim()
+        low_y, high_y = ax.get_ylim()
+        low = np.max(low_x, low_y)
+        high = np.min(high_x, high_y)
         identity.set_data([low, high], [low, high])
     callback(axes)
     axes.callbacks.connect('xlim_changed', callback)
@@ -34,64 +53,83 @@ def add_identity(axes, *line_args, **line_kwargs):
 
 
 def power_law(x, a, b, c):
-    return (a*(x**b)) + c
+    """Define the power function."""
+    return (a * (x ** b)) + c
 
 
 def power_func(p, x, y):
-    return (p[0]*(x**p[1])) - y
+    """Define the power function for use with scipy.optimize"""
+    return (p[0] * (x ** p[1])) - y
 
 
 def power_func_intercept(p, x, y):
-    return (p[0]*(x**p[1])) + p[2] - y
+    """Define a power function with an intercept for use with scipy.optimize"""
+    return (p[0] * (x ** p[1])) + p[2] - y
 
 
 def linear_law(x, a, b):
-    return a*x + b
+    """Define a linear function."""
+    return a * x + b
 
 
 def linear_func(p, x, y):
-    return (p*x) - y
+    """Define a linear function for use with scipy.optimize"""
+    return (p * x) - y
 
 
 def gaussian(x, A, sigma, mu):
-    return A/(np.sqrt(2*np.pi)*sigma)*np.exp(-(x-mu)**2/(2.*sigma**2))
+    """Define a gaussian function."""
+    return A / (np.sqrt(2 * np.pi) * sigma) * np.exp(-(x - mu) ** 2 / (2. * sigma ** 2))
 
 
 def gaussian_func(p, x, y):
-    return p[0]/(np.sqrt(2*np.pi)*p[1])*np.exp(-(x-p[2])**2/(2.*p[1]**2)) - y
+    """Define a gaussian function for use with scipy.optimize."""
+    return p[0] / (np.sqrt(2 * np.pi) * p[1]) * np.exp(-(x - p[2]) ** 2 / (2. * p[1] ** 2)) - y
 
 
-def fit_xy(x, y, fitType='power'):
+def fit_xy(x, y, fit_type='power'):
+    """Fit a set of two variables using robust least squares and return coefficients.
+
+    Args:
+        x (array): independent variable
+        y (array): dependent variable
+        fit_type (str): choose from power, powerC, or linear for type of fit
+
+    Returns:
+        dict: dictionary of coefficients and their error terms
+
+    """
     ind = (np.isfinite(x) & np.isfinite(y))
-    if fitType=='power':
+    if fit_type == 'power':
         popt = scipy.optimize.least_squares(power_func, [1, 1],
-                        args=(x[ind], y[ind]), bounds=([.0,0], [np.inf, np.inf]),
-                        ftol=1e-8, xtol=1e-8, gtol=1e-8, x_scale='jac',
-                        jac='3-point', loss='soft_l1', f_scale=.1)
-    elif fitType=='powerC':
-        popt = scipy.optimize.least_squares(power_func_intercept, [1, .5, 1], 
-                        args=(x[ind], y[ind]), max_nfev=10000,
-                        bounds=([0,0,0], [np.inf, np.inf,np.inf]), 
-                        ftol=1e-3, xtol=1e-3, gtol=1e-3, x_scale='jac', 
-                        jac='3-point', loss='soft_l1', f_scale=.5)
+                                            args=(x[ind], y[ind]), bounds=([.0, 0], [np.inf, np.inf]),
+                                            ftol=1e-8, xtol=1e-8, gtol=1e-8, x_scale='jac',
+                                            jac='3-point', loss='soft_l1', f_scale=.1)
+    elif fit_type == 'powerC':
+        popt = scipy.optimize.least_squares(power_func_intercept, [1, .5, 1],
+                                            args=(x[ind], y[ind]), max_nfev=10000,
+                                            bounds=([0, 0, 0], [np.inf, np.inf,np.inf]),
+                                            ftol=1e-3, xtol=1e-3, gtol=1e-3, x_scale='jac',
+                                            jac='3-point', loss='soft_l1', f_scale=.5)
     else:
-        popt = scipy.optimize.least_squares(linear_func, [1],
-                        args=(x[ind], y[ind]), loss='huber', f_scale=.1)
+        popt = scipy.optimize.least_squares(linear_func, [1], args=(x[ind], y[ind]), loss='huber', f_scale=.1)
+
     # ---------------Acquire fit uncertainties-----------------------------------
-    _, s, VT = np.linalg.svd(popt.jac, full_matrices=False)
+    # taken from scipy fitting scheme
+    _, s, vt = np.linalg.svd(popt.jac, full_matrices=False)
     threshold = np.finfo(float).eps * max(popt.jac.shape) * s[0]
     s = s[s > threshold]
-    VT = VT[:s.size]
+    vt = vt[:s.size]
     pcov = np.dot(VT.T / s**2, VT)
     stderr = np.sqrt(np.diag(pcov))
 
     # --------------Return appropriate parameters--------------------------------
-    if fitType=='power':
+    if fit_type == 'power':
         return {'a': popt.x[0], 'aUnc': stderr[0], 
                 'b': popt.x[1], 'bUnc': stderr[1],
                 'n': len(x), 'res': np.sum(popt.fun/y[ind])}
-    elif fitType=='powerC':
-        return {'a': popt.x[0], 'aUnc': stderr[0], 
+    elif fit_type == 'powerC':
+        return {'a': popt.x[0], 'aUnc': stderr[0],
                 'b': popt.x[1], 'bUnc': stderr[1], 
                 'c': popt.x[2], 'cUnc': stderr[2],
                 'n': len(x), 'res': np.sum(popt.fun/y[ind])}
@@ -99,26 +137,43 @@ def fit_xy(x, y, fitType='power'):
         return {'a': popt.x[0], 'aUnc': stderr[0], 'n': len(x), 'res': np.sum(popt.fun/y[ind])}
 
 
-def plot_fits(a, b, c=5, fitType='power', ax=None, **kwargs):
-    def callback(axes):
+def plot_fits(a, b, c=5, fit_type='power', axes=None, **kwargs):
+    """Plot with coefficients a, b, and c for either a line or power law.
+
+    Coefficients follow
+
+    Args:
+        a (float):
+        b (float):
+        c (float):
+        fit_type (str): defaults to power fit, choose from power, powerC, or linear
+        axes (obj): the axis being resized
+        **kwargs: additional keywords for matplotlib plotting
+    """
+    def callback(ax):
+        """Provides the mechanism for recalculating the plots if they are resized.
+
+        ax (obj): axis that is being resized
+
+        """
         low_x, high_x = axes.get_xlim()
         low_y, high_y = axes.get_ylim()
-        low = min(low_x, low_y)
-        high = max(high_x, high_y)
+        low = np.min(low_x, low_y)
+        high = np.max(high_x, high_y)
         new_x = np.linspace(low, high, 10000)
-        if fitType == 'power':
+        if fit_type == 'power':
             ax.plot(new_x, power_law(new_x, a, b, 0), **kwargs)
             ax.plot(-new_x, -power_law(new_x, a, b, 0), **kwargs)
-        elif fitType=='powerC':
+        elif fit_type == 'powerC':
             ax.plot(new_x, power_law(new_x, a, b, c), **kwargs)
-        elif fitType == 'linear':
+        elif fit_type == 'linear':
             ax.plot(new_x, linear_law(new_x, a, b), **kwargs)
-    callback(ax)
-    ax.callbacks.connect('xlim_changed', callback)
-    ax.callbacks.connect('ylim_changed', callback)
+    callback(axes)
+    axes.callbacks.connect('xlim_changed', callback)
+    axes.callbacks.connect('ylim_changed', callback)
 
 
-def hist_axis(bl, diskLimits=[0,90], **kwargs):
+def hist_axis(bl, disk_limits=None, **kwargs):
     """Returned parameters for multiple histograms."""
     b = kwargs.pop('binCount', 100)
     constant = kwargs.pop('const', 'width')
@@ -130,47 +185,44 @@ def hist_axis(bl, diskLimits=[0,90], **kwargs):
 
     minimum = np.nanmin(x)
     maximum = np.nanmax(x)
-    if diskLimits is not None:
+    if disk_limits is not None:
         ind = np.where(np.logical_and(
-                np.logical_and(np.isfinite(x), np.isfinite(y)),
-                np.logical_and(da > diskLimits[0], da < diskLimits[1])
-                )
-            )
+            np.logical_and(np.isfinite(x), np.isfinite(y)), np.logical_and(da > disk_limits[0], da < disk_limits[1])))
         x = x[ind]
         y = y[ind]
     else:
         ind = np.where(np.logical_and(np.isfinite(x), np.isfinite(y)))
         x = x[ind]
         y = y[ind]
-    histList = []
+    hist_list = []
 
     # Split by constant bin width
     if constant == 'width':
         xedges = np.linspace(minimum, maximum, b)
         for i in range(1, xedges.shape[0] - 1):
             inds = np.where(
-                np.logical_and(
-                    x < xedges[i], x >= xedges[i-1]))
-            if len(inds[0]) < 20: continue
-            sliceMed = (xedges[i] + xedges[i-1]) / 2
-            histList.append(get_hist_info(y[inds], xedges, sliceMed))
+                np.logical_and(x < xedges[i], x >= xedges[i-1]))
+            if len(inds[0]) < 20:
+                continue
+            slice_med = (xedges[i] + xedges[i-1]) / 2
+            hist_list.append(get_hist_info(y[inds], xedges, slice_med))
     # Split by constant bin count
     else: 
-        sortInd = np.argsort(x)
-        y = y[sortInd]
+        sort_ind = np.argsort(x)
+        y = y[sort_ind]
         s = 0
         e = 100
         for i in range(0, len(y), b):
-            sliceMed = np.median(x[s:e])
-            histList.append(get_hist_info(y[s:e], 10, sliceMed))
+            slice_med = np.median(x[s:e])
+            hist_list.append(get_hist_info(y[s:e], 10, slice_med))
             s += b
             e += b
 
-    return histList, x, y
+    return hist_list, x, y
 
 
 def get_hist_info(data, b, sM):
-    """Deprecated. For use with hist_axis in getting histogram data."""
+    """For use with hist_axis in getting histogram data."""
     med = np.median(data)
     mea = np.mean(data)
     std = np.std(data)
@@ -193,10 +245,58 @@ def scatter_plot(dict1, dict2, separate=False):
         i += 1
     plt.show()
 
+def plot_hist2d(m1, m2, cond):
+    x = m2.remap.ravel()
+    y = m1.im_corr.v.ravel()
+    edges = np.arange(-987.5, 987.5, 25)
 
-def box_plot(bl, dL, ax, clr='blue', corrections=False, **kwargs):
+    f = plt.figure()
+    ax = f.add_subplot(111)
+    ind = (np.abs(x) > cond) * (np.abs(y) > cond) * np.isfinite(x) * np.isfinite(y)
+
+    ax.hist2d(x[ind], y[ind], cmap='inferno', norm=colors.LogNorm(), bins=edges)
+    ax.set_facecolor('black')
+    ax.set(adjustable='box-forced', aspect='equal')
+
+
+def hist2d(x, y, ax, edges=None):
+    """Plots a hist2d of the points on a given axis.
+
+    Returns:
+        h2d: the hist2d axis
+    """
+    y, x, da = temp_q.extract_valid_points(points)
+
+    co = 'inferno'
+    plt.rc('text', usetex=True)
+    i1 = points['i1']
+    i2 = points['i2']
+
+    sorted_inds = np.argsort(da)
+    f_i1 = y[sorted_inds]
+    f_i2 = x[sorted_inds]
+    da = da[sorted_inds]
+
+    xmin = np.nanmin(f_i2)
+    xmax = np.nanmax(f_i2)
+    ymin = np.nanmin(f_i1)
+    ymax = np.nanmax(f_i1)
+    lim = min(abs(xmin), abs(xmax), abs(ymin), abs(ymax))
+
+    h2d = ax.hist2d(x[ind], y[ind], cmap='inferno', norm=colors.LogNorm(), bins=edges, zorder=1)
+    #hb = ax.hist2d(f_i2, f_i1, cmap='inferno', bins='log', gridsize=100, zorder=1)
+
+    # ------------- Set Plot Properties ----------------------------
+    ccplot.add_identity(ax, color='.3', ls='-', zorder=1)
+    ax.axis([-lim, lim, -lim, lim])
+    ax.set(adjustable='box-forced', aspect='equal')
+
+    return hb
+
+
+def box_plot(bl, disk_limits, ax, clr='blue', corrections=False, **kwargs):
     """Creates a box plot and sets properties."""
-    hl, x, y = hist_axis(bl, dL, **kwargs)
+    hl, x, y = hist_axis(bl, disk_limits, **kwargs)
     y2 = np.array([t['med'] for t in hl])
     x2 = np.array([s['sliceMed'] for s in hl])
     lim = max(np.max(np.abs(x2)), np.max(np.abs(y2)))*1.1
@@ -204,7 +304,6 @@ def box_plot(bl, dL, ax, clr='blue', corrections=False, **kwargs):
     box_widths = .4*(max(x2) - min(x2))/len(y2)
     box = ax.boxplot(box_list, widths=box_widths, positions=x2, manage_xticks=False,
                      whis=0, sym="", showcaps=False, patch_artist=True)
-
 
     ax.set_xlim(-lim, lim)
     ax.set_ylim(-lim, lim)
@@ -226,16 +325,13 @@ def box_plot(bl, dL, ax, clr='blue', corrections=False, **kwargs):
             divided_dist = bin_kernel_array/np.sqrt(total_kernel_array)
             max_ind = np.argmax(bin_kernel_array)
             ind_valid = (divided_dist < 1e10)
-            # ind_valid = (divided_dist < divided_dist[max_ind])
             try:
                 popt = scipy.optimize.least_squares(gaussian_func,
                                                     [np.abs(bin['sliceMed']), np.abs(bin['sliceMed'] / 5),
                                                      bin['sliceMed']],
                                                     args=(xspace[ind_valid], divided_dist[ind_valid]),
                                                     jac='3-point', x_scale='jac', loss='soft_l1', f_scale=.1).x
-                # popt, pcov = curve_fit(gaussian, xspace[ind_valid], divided_dist[ind_valid],
-                #     p0=[np.abs(bin['sliceMed']), np.abs(bin['sliceMed']/5), bin['sliceMed']], maxfev=10000)
-            except:
+            except ValueError:
                 popt = np.array([np.nan, np.nan, np.nan])
             gaussian_means.append(popt[2])
             gaussian_stds.append(popt[1])
@@ -255,11 +351,11 @@ def box_grid(bl, diskCuts=[0, 30, 45, 70], show_fits=True, **kwargs):
     disk_cut_data = []
     f, grid = plt.subplots(1, len(diskCuts) - 1, figsize=(18, 9))
     f.subplots_adjust(wspace=0)
-    colors = [(80/255, 60/255, 0), (81/255, 178/255, 76/255), (114/255, 178/255, 229/255)]
+    clrs = [(80/255, 60/255, 0), (81/255, 178/255, 76/255), (114/255, 178/255, 229/255)]
     # -----------------------------Extract box data------------------------------
     for i in range(len(diskCuts)-1):
-        disk_cut_data.append(box_plot(bl, diskCuts[i:i+2], grid[i], clr=colors[i], **kwargs))
-        disk_cut_data[i][0]['c'] = colors[i]
+        disk_cut_data.append(box_plot(bl, diskCuts[i:i+2], grid[i], clr=clrs[i], **kwargs))
+        disk_cut_data[i][0]['c'] = clrs[i]
 
     # --------------------------Setting plot parameters--------------------------
     max_field = np.max([np.max(np.abs(xy)) for ax in grid for xy in (ax.get_ylim(), ax.get_xlim())])
@@ -268,25 +364,21 @@ def box_grid(bl, diskCuts=[0, 30, 45, 70], show_fits=True, **kwargs):
         plot.set_ylim(-max_field, max_field)
 
     grid[1].xaxis.set_ticks_position('top')
-    grid[0].set_ylabel(
-        r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
-        labelpad=-.75)
-    grid[-1].set_ylabel(
-        r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()),
-        labelpad=25, rotation=270)
+    grid[0].set_ylabel(r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()), labelpad=-.75)
+    grid[-1].set_ylabel(r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i1.upper()), labelpad=25,
+                        rotation=270)
     grid[1].get_yaxis().set_ticks([])
     grid[2].yaxis.set_ticks_position('right')
     grid[2].yaxis.set_label_position('right')
     f.text(.5, .17, r'$\mathrm{{{0}\ Magnetic\ Flux\ Density\ (Mx/cm^2)}}$'.format(i2.upper()),
            horizontalalignment='center')
-    fig_title = "Time Difference Between Magnetograms: " + t_diff  # + \
-    # '\n' + 'n = ' + str(bl['n'])
+    fig_title = "Time Difference Between Magnetograms: " + t_diff  # + '\n' + 'n = ' + str(bl['n'])
     f.suptitle(fig_title, y=.85, fontsize=30, fontweight='bold')
 
     if show_fits:
         lines = ["-", "--", ":"]
         linecycler = cycle(lines)
-        colorcycler = cycle(colors)
+        colorcycler = cycle(clrs)
         fit_parameters = []
         for h in disk_cut_data:
             fit_parameters.append(fit_xy(np.abs(np.array([s['sliceMed'] for s in h])),
@@ -433,8 +525,8 @@ def corrected_box_grid(bl, diskCuts=[0, 30, 45, 70], fullSectorData=None, **kwar
         c = next(colorcycler)
         plot_fits(fitParametersPower[i]['a'], fitParametersPower[i]['b'], ax=g, color=c,
             linewidth=2, linestyle=next(linecycler), zorder=1)
-        plot_fits(fitParametersLinear[i]['a'], 0, fitType='linear', ax=g, color=c,
-            linewidth=2, linestyle=next(linecycler), zorder=1)
+        plot_fits(fitParametersLinear[i]['a'], 0, fit_type='linear', ax=g, color=c,
+                  linewidth=2, linestyle=next(linecycler), zorder=1)
 
     for ax, letter in zip(grid, 'abcde'):
         ax.annotate(
@@ -591,11 +683,11 @@ def variance_grid(bl, fullSectorData=None, diskCuts=[0, 20, 45, 90], **kwargs):
                 color=colors[i], **kwargs)
         g.set_xlim(0, nxLims[str(bl['n'])])
         g.set_ylim(0, nyLims[str(bl['n'])])
-        p = fit_xy(np.abs(medians), np.abs(stdevs), fitType='powerC')
+        p = fit_xy(np.abs(medians), np.abs(stdevs), fit_type='powerC')
         fitParameters.append(p)
         c = next(colorcycler)
-        plot_fits(p['a'], p['b'], p['c'], fitType='powerC', ax=g, color=c,
-                 linewidth=3, linestyle='--', zorder=1)
+        plot_fits(p['a'], p['b'], p['c'], fit_type='powerC', ax=g, color=c,
+                  linewidth=3, linestyle='--', zorder=1)
 
     #--------------------------Setting plot parameters--------------------------
     grid[1].xaxis.set_ticks_position('top')
