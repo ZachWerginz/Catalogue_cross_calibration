@@ -4,8 +4,6 @@ In order to show fragmentation of the solar disk and preliminary results, we plo
 the solar disk with overlaid colored blocks as a visual aid to show how the solar disk is being fragmented. The other
 two panels contain a two dimensional histogram as well as violin plots.
 
-Todo:
-    (Zach) Actually change the hexbins to 2d histograms
 """
 
 import random
@@ -55,45 +53,7 @@ def block_plot(m1, blocks, ax1):
     ax1.imshow(im1, vmin=0, vmax=1, alpha=.4, cmap='jet', zorder=2)
 
 
-def hist2d(points, ax):
-    """Plots a hist2d of the points on a given axis.
-
-    Args:
-        points (dict): a list of quadrangles containing magnetic info
-        ax (obj): matplotlib axis to plot on
-
-    Returns:
-        hb: the hist2d axis
-    """
-    y, x, da = temp_q.extract_valid_points(points)
-
-    co = 'inferno'
-    plt.rc('text', usetex=True)
-    i1 = points['i1']
-    i2 = points['i2']
-
-    sorted_inds = np.argsort(da)
-    f_i1 = y[sorted_inds]
-    f_i2 = x[sorted_inds]
-    da = da[sorted_inds]
-
-    xmin = np.nanmin(f_i2)
-    xmax = np.nanmax(f_i2)
-    ymin = np.nanmin(f_i1)
-    ymax = np.nanmax(f_i1)
-    lim = min(abs(xmin), abs(xmax), abs(ymin), abs(ymax))
-
-    hb = ax.hist2d(f_i2, f_i1, cmap=co, bins='log', gridsize=100, zorder=1)
-
-    # ------------- Set Plot Properties ----------------------------
-    ccplot.add_identity(ax, color='.3', ls='-', zorder=1)
-    ax.axis([-lim, lim, -lim, lim])
-    ax.set(adjustable='box-forced', aspect='equal')
-
-    return hb
-
-
-def plot_row(f, m1, blocks, results):
+def plot_row(f, m1, blocks, results, hist_lim):
     """Plots three axes on a figure - the fragmentation, a hist2d plot, and a violin plot.
 
     Args:
@@ -101,6 +61,7 @@ def plot_row(f, m1, blocks, results):
         m1 (obj): CRD object who's image data will be shown
         blocks (list): list of quadrangles to show fragmentation
         results (dict): points to provide for the hist2d
+        hist_lim (float): axis limits for 2D histogram
     """
     f.subplots_adjust(left=.1, right=.9, wspace=0)
     ax1 = f.add_subplot(131, projection=m1.im_raw.wcs)
@@ -110,7 +71,7 @@ def plot_row(f, m1, blocks, results):
     color = (81 / 255, 178 / 255, 76 / 255)
 
     block_plot(m1, blocks, ax1)
-    hb = hist2d(results, ax2)
+    hb = ccplot.hist2d(results['reference_fd'], results['secondary_fd'], ax2, noise=0, lim=hist_lim)
     ccplot.violin_plot(results, [0, 70], ax3, alpha=.4, percentiles=[0, 100], clr=color, corrections=False)
     ccplot.violin_plot(results, [0, 70], ax3, alpha=.5, percentiles=[25, 75], clr=color, corrections=False)
     ccplot.violin_plot(results, [0, 70], ax3, alpha=.75, percentiles=[37.5, 62.5], clr=color, corrections=False)
@@ -140,19 +101,21 @@ def main():
     r_25 = u.download_cc_data('spmg', 'spmg', 25, '23 hours', '25 hours')
     r_50 = u.download_cc_data('spmg', 'spmg', 50, '23 hours', '25 hours')
     r_100 = u.download_cc_data('spmg', 'spmg', 100, '23 hours', '25 hours')
+
     #  --------------------Plot first set of panels of n = 25------------------
     f1 = plt.figure(1)
-    plot_row(f1, m1, blocks_25, r_25)
+    plot_row(f1, m1, blocks_25, r_25, 250)
     ax1, ax2, ax3 = f1.get_axes()
     ax1.set_ylabel(r'$\mathrm{{n = {0}}}$'.format('25'))
     ax2.set_yticks([-200, 0, 200])
+    ax2.set_xticks([-200, 0, 200])
     ax2.set_yticklabels([r'$-200$', r'$0$', r'$200$'], ha='right')
     ax3.set_yticks([-50, 0, 50])
     ax3.set_yticklabels([r'$-50$', r'$0$', r'$50$'], ha='right')
 
     #  --------------------Plot first set of panels of n = 25------------------
     f2 = plt.figure(2)
-    plot_row(f2, m1, blocks_50, r_50)
+    plot_row(f2, m1, blocks_50, r_50, 650)
     ax1, ax2, ax3 = f2.get_axes()
     ax1.set_ylabel(r'$\mathrm{{n = {0}}}$'.format('50'))
     ax2.set_xticks([-600, 0, 600])
@@ -163,7 +126,7 @@ def main():
 
     #  --------------------Plot first set of panels of n = 25------------------
     f3 = plt.figure(3)
-    plot_row(f3, m1, blocks_100, r_100)
+    plot_row(f3, m1, blocks_100, r_100, 1600)
     ax1, ax2, ax3 = f3.get_axes()
     ax1.set_ylabel(r'$\mathrm{{n = {0}}}$'.format('100'))
     ax2.set_yticks([-1500, 0, 1500])

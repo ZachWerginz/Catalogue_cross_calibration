@@ -44,8 +44,8 @@ def add_identity(axes, *line_args, **line_kwargs):
         """
         low_x, high_x = ax.get_xlim()
         low_y, high_y = ax.get_ylim()
-        low = np.max(low_x, low_y)
-        high = np.min(high_x, high_y)
+        low = max(low_x, low_y)
+        high = min(high_x, high_y)
         identity.set_data([low, high], [low, high])
     callback(axes)
     axes.callbacks.connect('xlim_changed', callback)
@@ -158,8 +158,8 @@ def plot_fits(a, b, c=5, fit_type='power', axes=None, **kwargs):
         """
         low_x, high_x = axes.get_xlim()
         low_y, high_y = axes.get_ylim()
-        low = np.min(low_x, low_y)
-        high = np.max(high_x, high_y)
+        low = min(low_x, low_y)
+        high = max(high_x, high_y)
         new_x = np.linspace(low, high, 10000)
         if fit_type == 'power':
             ax.plot(new_x, power_law(new_x, a, b, 0), **kwargs)
@@ -245,53 +245,38 @@ def scatter_plot(dict1, dict2, separate=False):
         i += 1
     plt.show()
 
-def plot_hist2d(m1, m2, cond):
-    x = m2.remap.ravel()
-    y = m1.im_corr.v.ravel()
-    edges = np.arange(-987.5, 987.5, 25)
 
-    f = plt.figure()
-    ax = f.add_subplot(111)
-    ind = (np.abs(x) > cond) * (np.abs(y) > cond) * np.isfinite(x) * np.isfinite(y)
-
-    ax.hist2d(x[ind], y[ind], cmap='inferno', norm=colors.LogNorm(), bins=edges)
-    ax.set_facecolor('black')
-    ax.set(adjustable='box-forced', aspect='equal')
-
-
-def hist2d(x, y, ax, edges=None):
+def hist2d(x, y, ax, edges=None, noise=26, lim=1000):
     """Plots a hist2d of the points on a given axis.
+
+    Args:
+        x (array): x data to plot
+        y (array): y data to plot
+        ax (obj): the matplotlib axis object to plot on
+        edges (array): the edges for the histograms
+        noise (float): the level of field noise you want to ignore
+        lim (float): axis limits
 
     Returns:
         h2d: the hist2d axis
     """
-    y, x, da = temp_q.extract_valid_points(points)
-
-    co = 'inferno'
     plt.rc('text', usetex=True)
-    i1 = points['i1']
-    i2 = points['i2']
 
-    sorted_inds = np.argsort(da)
-    f_i1 = y[sorted_inds]
-    f_i2 = x[sorted_inds]
-    da = da[sorted_inds]
+    xmin = np.nanmin(x)
+    xmax = np.nanmax(x)
+    ymin = np.nanmin(y)
+    ymax = np.nanmax(y)
+    ind = (np.abs(x) > noise) * (np.abs(y) > noise) * np.isfinite(x) * np.isfinite(y)
 
-    xmin = np.nanmin(f_i2)
-    xmax = np.nanmax(f_i2)
-    ymin = np.nanmin(f_i1)
-    ymax = np.nanmax(f_i1)
-    lim = min(abs(xmin), abs(xmax), abs(ymin), abs(ymax))
-
-    h2d = ax.hist2d(x[ind], y[ind], cmap='inferno', norm=colors.LogNorm(), bins=edges, zorder=1)
-    #hb = ax.hist2d(f_i2, f_i1, cmap='inferno', bins='log', gridsize=100, zorder=1)
-
+    h2d = ax.hist2d(x[ind], y[ind], cmap='inferno', norm=colors.LogNorm(), bins=100, zorder=1)
+    
     # ------------- Set Plot Properties ----------------------------
-    ccplot.add_identity(ax, color='.3', ls='-', zorder=1)
+    add_identity(ax, color='.3', ls='-', zorder=2)
     ax.axis([-lim, lim, -lim, lim])
+    ax.set_facecolor('black')
     ax.set(adjustable='box-forced', aspect='equal')
 
-    return hb
+    return h2d
 
 
 def box_plot(bl, disk_limits, ax, clr='blue', corrections=False, **kwargs):
