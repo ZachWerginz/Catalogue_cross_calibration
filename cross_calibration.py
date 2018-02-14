@@ -134,7 +134,7 @@ def interpolate_remap(m1, m2, raw=False):
     ind2 = (np.isfinite(x2) * np.isfinite(y2) * np.isfinite(v2) * (x2 > minimum) * (x2 < maximum))
     ind1 = (np.isfinite(x1) * np.isfinite(y1) * (x1 > minimum) * (x1 < maximum))
 
-    interp_data = griddata(np.array(x2[ind2], y2[ind2]), v2[ind2], (x1[ind1], y1[ind1]), method='cubic')
+    interp_data = griddata((x2[ind2], y2[ind2]), v2[ind2], (x1[ind1], y1[ind1]), method='cubic')
     new_m2 = np.full((int(dim1[0].value), int(dim1[1].value)), np.nan)
 
     new_m2.ravel()[ind1] = interp_data
