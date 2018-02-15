@@ -262,14 +262,19 @@ def hist2d(x, y, ax, edges=None, noise=26, lim=1000):
     """
     plt.rc('text', usetex=True)
 
+    if noise != 0:
+        bins = (lim // noise)
+        edges = np.arange((-bins * noise) + noise, (bins * noise) + noise, noise)
+    else:
+        edges = 100
     xmin = np.nanmin(x)
     xmax = np.nanmax(x)
     ymin = np.nanmin(y)
     ymax = np.nanmax(y)
     ind = (np.abs(x) > noise) * (np.abs(y) > noise) * np.isfinite(x) * np.isfinite(y)
 
-    h2d = ax.hist2d(x[ind], y[ind], cmap='inferno', norm=colors.LogNorm(), bins=100, zorder=1)
-    
+    h2d = ax.hist2d(x[ind], y[ind], cmap='inferno', norm=colors.LogNorm(), bins=edges, zorder=1)
+
     # ------------- Set Plot Properties ----------------------------
     add_identity(ax, color='.3', ls='-', zorder=2)
     ax.axis([-lim, lim, -lim, lim])

@@ -1,75 +1,71 @@
-import matplotlib.pyplot as plt
+"""This script takes magnetograms and compares them pixel for pixel.
+
+This also includes funcitonality for finding optimum rotation among magnetograms using the golden search method. It was
+determined that finding the optimal rotation among two magnetograms produces minimal benefits.
+
+"""
+
 import glob
-import cross_calibration as c
-from coord import CRD
+
 import matplotlib.colors as colors
+import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 import scipy.optimize as sciop
 from matplotlib.ticker import MaxNLocator
+
+import cross_calibration as c
 import util as u
+import visualizations.cc_plot as ccplot
+from coord import CRD
 
-
-def get_pcoeff(increment, m1=None, file2=None, cond=None):
-    print('Increment: {}'.format(increment))
-    m2 = CRD(file2, rotate=increment)
-    m2.magnetic_flux()
-    rotation = u.diff_rot(m1, m2)
-    m2.lonhRot = m2.lonh + rotation.value
-    c.interpolate_remap(m1, m2)
-    y = m1.im_corr.v.ravel()
-    x = m2.remap.ravel()
-    ind = (np.abs(x) > cond) * (np.abs(y) > cond) * np.isfinite(x) * np.isfinite(y)
-    corr_coeff = sp.stats.pearsonr(x[ind], y[ind])
-    print('Pearson Coefficient: {}'.format(corr_coeff[0]))
-    return -corr_coeff[0]
-
-
-def rotate_p(file1, file2, instr='hmi'):
-    if instr == 'mdi':
-        cond = 26
-    else:
-        cond = 20
-
-    m1 = CRD(file1)
-    m1.magnetic_flux()
-    y = m1.im_corr.v.ravel()
-    best_p0_diff = 0
-    best_corr = 0
-    best_p0_diff = sciop.minimize_scalar(get_pcoeff, method='golden', tol=.05,
-                                         args=(m1, file2, cond), bracket=(-1, -.4, 1))
-
-    print('Best p_angle shift: {}'.format(best_p0_diff))
-
-    m2 = CRD(file2, rotate=best_p0_diff.x)
-    m2.magnetic_flux()
-    rotation = u.diff_rot(m1, m2)
-    m2.lonhRot = m2.lonh + rotation.value
-    c.interpolate_remap(m1, m2)
-    x = m2.remap.ravel()
-    ind = (np.abs(x) > cond) * (np.abs(y) > cond) * np.isfinite(x) * np.isfinite(y)
-    edges = np.arange(-987.5, 987.5, 25)
-    f = plt.figure(1)
-    ax = f.add_subplot(111)
-    ax.hist2d(x[ind], y[ind], cmap='inferno', norm=colors.LogNorm(), bins=edges)
-    ax.set_facecolor('black')
-    ax.set(adjustable='box-forced', aspect='equal')
-
-    return best_p0_diff
-
-
-def plot_hist2d(m1, m2, cond):
-    x = m2.remap.ravel()
-    y = m1.im_corr.v.ravel()
-    edges = np.arange(-987.5, 987.5, 25)
-
-    f = plt.figure()
-    ax = f.add_subplot(111)
-    ind = (np.abs(x) > cond) * (np.abs(y) > cond) * np.isfinite(x) * np.isfinite(y)
-
-    ax.hist2d(x[ind], y[ind], cmap='inferno', norm=colors.LogNorm(), bins=edges)
-    ax.set_facecolor('black')
-    ax.set(adjustable='box-forced', aspect='equal')
+#
+# def get_pcoeff(increment, m1=None, file2=None, cond=None):
+#     print('Increment: {}'.format(increment))
+#     m2 = CRD(file2, rotate=increment)
+#     m2.magnetic_flux()
+#     rotation = u.diff_rot(m1, m2)
+#     m2.lonhRot = m2.lonh + rotation.value
+#     c.interpolate_remap(m1, m2)
+#     y = m1.im_corr.v.ravel()
+#     x = m2.remap.ravel()
+#     ind = (np.abs(x) > cond) * (np.abs(y) > cond) * np.isfinite(x) * np.isfinite(y)
+#     corr_coeff = sp.stats.pearsonr(x[ind], y[ind])
+#     print('Pearson Coefficient: {}'.format(corr_coeff[0]))
+#     return -corr_coeff[0]
+#
+#
+# def rotate_p(file1, file2, instr='hmi'):
+#     if instr == 'mdi':
+#         cond = 26
+#     else:
+#         cond = 20
+#
+#     m1 = CRD(file1)
+#     m1.magnetic_flux()
+#     y = m1.im_corr.v.ravel()
+#     best_p0_diff = 0
+#     best_corr = 0
+#     best_p0_diff = sciop.minimize_scalar(get_pcoeff, method='golden', tol=.05,
+#                                          args=(m1, file2, cond), bracket=(-1, -.4, 1))
+#
+#     print('Best p_angle shift: {}'.format(best_p0_diff))
+#
+#     m2 = CRD(file2, rotate=best_p0_diff.x)
+#     m2.magnetic_flux()
+#     rotation = u.diff_rot(m1, m2)
+#     m2.lonhRot = m2.lonh + rotation.value
+#     c.interpolate_remap(m1, m2)
+#     x = m2.remap.ravel()
+#     ind = (np.abs(x) > cond) * (np.abs(y) > cond) * np.isfinite(x) * np.isfinite(y)
+#     edges = np.arange(-987.5, 987.5, 25)
+#     f = plt.figure(1)
+#     ax = f.add_subplot(111)
+#     ax.hist2d(x[ind], y[ind], cmap='inferno', norm=colors.LogNorm(), bins=edges)
+#     ax.set_facecolor('black')
+#     ax.set(adjustable='box-forced', aspect='equal')
+#
+#     return best_p0_diff
 
 
 def export_to_standard_form(x, y):
@@ -78,6 +74,11 @@ def export_to_standard_form(x, y):
 
 
 def create_sim_variable_times():
+    """Input an instrument and plot sample data at different time scales pixel for pixel.
+
+        This will compare two magnetograms in time pixel for pixel with a 2D histogram shown on a log scale.
+
+    """
     cond = 20
     times = ['2 hrs', '6 hrs', '24 hrs']
 
@@ -112,6 +113,17 @@ def create_sim_variable_times():
 
 
 def create_variable_time_plot(instr):
+    """Input an instrument and plot sample data at different time scales pixel for pixel.
+
+    This will compare two magnetograms in time pixel for pixel with a 2D histogram shown on a log scale.
+
+    Args:
+        instr (str): the instrument to plot
+
+    Returns:
+        object: a tuple of the figure and axis grid
+
+    """
     if instr == 'mdi':
         files = glob.glob('test_mgnts/fd*')
         f, grid = plt.subplots(1, 3, figsize=(16, 16 / 3), sharex='col', sharey='row',
@@ -123,21 +135,16 @@ def create_variable_time_plot(instr):
         files = glob.glob('test_mgnts/hmi*')
         f, grid = plt.subplots(2, 3, figsize=(16, 16/1.5), sharex='col', sharey='row',
                                gridspec_kw={'wspace': 0, 'hspace': 0})
-        #grid[0].set_ylabel('HMI', fontsize=30)
         f.text(0.07, 0.5, 'HMI', ha='center', va='center', rotation='vertical', fontsize=30)
         cond = 20
         times = ['12 min', '24 min', '48 min', '1.6 hrs', '6.4 hrs', '24 hrs']
     lim = 1000
-    edges = np.arange(-987.5, 987.5, 25)
 
     for file, ax in zip(files[1:], grid.flatten()):
         m1, m2 = c.prepare_magnetograms(files[0], file)
         x = m2.remap.ravel()
         y = m1.im_corr.v.ravel()
-        ind = (np.abs(x) > cond) * (np.abs(y) > cond) * np.isfinite(x) * np.isfinite(y)
-        ax.hist2d(x[ind], y[ind], cmap='inferno', norm=colors.LogNorm(), bins=edges)
-        ax.axis([-lim, lim, -lim, lim])
-        ax.set_facecolor('black')
+        ccplot.hist2d(x, y, ax, noise=cond, lim=lim)
 
     for ax, letter in zip(f.get_axes(), times):
         ax.annotate(
