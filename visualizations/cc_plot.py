@@ -11,6 +11,9 @@ import matplotlib.cm as cm
 import matplotlib.colors as colors
 import matplotlib.lines as mlines
 import matplotlib.pyplot as plt
+import mpl_scatter_density
+from astropy.visualization import LogStretch
+from astropy.visualization.mpl_normalize import ImageNormalize
 import numpy as np
 import pandas as pd
 import scipy
@@ -283,6 +286,30 @@ def hist2d(x, y, ax, edges=None, noise=26, lim=1000):
 
     return h2d
 
+
+def scatter_density(x, y, ax, lim=1000, log_vmax=600, cmap='inferno', null_cond=0):
+    """Plots a scatter density of the points on a given axis.
+
+    This is useful for high density scatter plots if you don't want to deal with histogram binning.
+
+    Args:
+        x (array): x data to plot
+        y (array): y data to plot
+        ax (obj): the matplotlib axis object to plot on
+        lim (float): axis limits
+        log_vmax: the maximum saturation for the log scale on the density
+        cmap (obj): a colormap to use for the density
+        null_cond (float): a number used to ignore noise in the data below a certain threshold
+
+    """
+
+    plt.rc('text', usetex=True)
+    log_norm = ImageNormalize(vmin=0., vmax=log_vmax, stretch=LogStretch())
+    ind = np.isfinite(x) * np.isfinite(y) * (np.abs(x) > null_cond) * (np.abs(y) > null_cond)
+    ax.scatter_density(x[ind], y[ind], norm=log_norm, cmap=cmap)
+    ax.set_xlim(-lim, lim)
+    ax.set_ylim(-lim, lim)
+    ax.set(adjustable='box-forced', aspect='equal')
 
 def box_plot(bl, disk_limits, ax, clr='blue', corrections=False, **kwargs):
     """Creates a box plot and sets properties."""

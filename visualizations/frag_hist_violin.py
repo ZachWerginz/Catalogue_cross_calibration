@@ -8,6 +8,7 @@ two panels contain a two dimensional histogram as well as violin plots.
 
 import random
 
+import mpl_scatter_density
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -113,7 +114,7 @@ def main():
     ax3.set_yticks([-50, 0, 50])
     ax3.set_yticklabels([r'$-50$', r'$0$', r'$50$'], ha='right')
 
-    #  --------------------Plot first set of panels of n = 25------------------
+    #  --------------------Plot first set of panels of n = 50------------------
     f2 = plt.figure(2)
     plot_row(f2, m1, blocks_50, r_50, 650)
     ax1, ax2, ax3 = f2.get_axes()
@@ -124,7 +125,7 @@ def main():
     ax3.set_yticks([-200, 0, 200])
     ax3.set_yticklabels([r'$-200$', r'$0$', r'$200$'], ha='right')
 
-    #  --------------------Plot first set of panels of n = 25------------------
+    #  --------------------Plot first set of panels of n = 100------------------
     f3 = plt.figure(3)
     plot_row(f3, m1, blocks_100, r_100, 1600)
     ax1, ax2, ax3 = f3.get_axes()

@@ -76,7 +76,7 @@ def export_to_standard_form(x, y):
 def create_sim_variable_times():
     """Input an instrument and plot sample data at different time scales pixel for pixel.
 
-        This will compare two magnetograms in time pixel for pixel with a 2D histogram shown on a log scale.
+    This will compare two magnetograms in time pixel for pixel with a 2D histogram shown on a log scale.
 
     """
     cond = 20
@@ -127,24 +127,39 @@ def create_variable_time_plot(instr):
     if instr == 'mdi':
         files = glob.glob('test_mgnts/fd*')
         f, grid = plt.subplots(1, 3, figsize=(16, 16 / 3), sharex='col', sharey='row',
-                               gridspec_kw={'wspace': 0, 'hspace': 0})
+                               gridspec_kw={'wspace': 0, 'hspace': 0},
+                               subplot_kw={'projection': 'scatter_density'})
         grid[0].set_ylabel('MDI', fontsize=30)
         cond = 26
         times = ['1.6 hrs', '6.4 hrs', '24 hrs']
     elif instr == 'hmi':
         files = glob.glob('test_mgnts/hmi*')
         f, grid = plt.subplots(2, 3, figsize=(16, 16/1.5), sharex='col', sharey='row',
-                               gridspec_kw={'wspace': 0, 'hspace': 0})
+                               gridspec_kw={'wspace': 0, 'hspace': 0},
+                               subplot_kw={'projection': 'scatter_density'})
         f.text(0.07, 0.5, 'HMI', ha='center', va='center', rotation='vertical', fontsize=30)
         cond = 20
         times = ['12 min', '24 min', '48 min', '1.6 hrs', '6.4 hrs', '24 hrs']
+    elif instr == 'sim':
+        files = glob.glob('test_mgnts/*.dat')
+        cond = 20
+        times = ['2 hrs', '6 hrs', '24 hrs']
+        f, grid = plt.subplots(1, 3, figsize=(16, 16 / 3), sharex='col', sharey='row',
+                               gridspec_kw={'wspace': 0, 'hspace': 0},
+                               subplot_kw={'projection': 'scatter_density'})
+        grid[0].set_ylabel('AFT Simulation', fontsize=30)
     lim = 1000
 
     for file, ax in zip(files[1:], grid.flatten()):
-        m1, m2 = c.prepare_magnetograms(files[0], file)
+        if instr == 'sim':
+            m1, m2 = c.prepare_simulation(files[0], file)
+        else:
+            m1, m2 = c.prepare_magnetograms(files[0], file)
         x = m2.remap.ravel()
         y = m1.im_corr.v.ravel()
-        ccplot.hist2d(x, y, ax, noise=cond, lim=lim)
+        # ccplot.hist2d(x, y, ax, noise=cond, lim=lim)
+        ccplot.scatter_density(x, y, ax, lim=lim, null_cond=cond, log_vmax=200)
+        ccplot.add_identity(ax, color='.5', ls='-', alpha=.5, linewidth=2, zorder=1)
 
     for ax, letter in zip(f.get_axes(), times):
         ax.annotate(
@@ -156,8 +171,13 @@ def create_variable_time_plot(instr):
     for ax in grid.flatten():
         ax.xaxis.set_major_locator(MaxNLocator(nbins=3, prune='both'))
         ax.yaxis.set_major_locator(MaxNLocator(nbins=3, prune='both'))
-        ax.xaxis.set_tick_params(labelsize=16)
-        ax.yaxis.set_tick_params(labelsize=16)
+        ax.xaxis.set_tick_params(labelsize=30)
+        ax.yaxis.set_tick_params(labelsize=30)
+
+    if instr == 'mdi':
+        f.subplots_adjust(top=0.982, bottom=0.075, left=0.1, right=0.977, hspace=0.2, wspace=0.0)
+    else:
+        f.subplots_adjust(top=0.969, bottom=0.085, left=0.1, right=0.977, hspace=0.2, wspace=0.0)
 
     return f, grid
 
