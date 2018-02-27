@@ -66,13 +66,14 @@ def plot_row(f, m1, blocks, results, hist_lim):
     """
     f.subplots_adjust(left=.1, right=.9, wspace=0)
     ax1 = f.add_subplot(131, projection=m1.im_raw.wcs)
-    ax2 = f.add_subplot(132)
+    ax2 = f.add_subplot(132, projection='scatter_density')
     ax3 = f.add_subplot(133)
 
     color = (81 / 255, 178 / 255, 76 / 255)
 
     block_plot(m1, blocks, ax1)
-    hb = ccplot.hist2d(results['reference_fd'], results['secondary_fd'], ax2, noise=0, lim=hist_lim)
+    # hb = ccplot.hist2d(results['reference_fd'], results['secondary_fd'], ax2, noise=0, lim=hist_lim)
+    plot = ccplot.scatter_density(results['reference_fd'], results['secondary_fd'], ax2, lim=hist_lim)
     ccplot.violin_plot(results, [0, 70], ax3, alpha=.4, percentiles=[0, 100], clr=color, corrections=False)
     ccplot.violin_plot(results, [0, 70], ax3, alpha=.5, percentiles=[25, 75], clr=color, corrections=False)
     ccplot.violin_plot(results, [0, 70], ax3, alpha=.75, percentiles=[37.5, 62.5], clr=color, corrections=False)
@@ -104,9 +105,9 @@ def main():
     r_100 = u.download_cc_data('spmg', 'spmg', 100, '23 hours', '25 hours')
 
     #  --------------------Plot first set of panels of n = 25------------------
-    f1 = plt.figure(1)
-    plot_row(f1, m1, blocks_25, r_25, 250)
-    ax1, ax2, ax3 = f1.get_axes()
+    fig1 = plt.figure()
+    plot_row(fig1, m1, blocks_25, r_25, 250)
+    ax1, ax2, ax3 = fig1.get_axes()
     ax1.set_ylabel(r'$\mathrm{{n = {0}}}$'.format('25'))
     ax2.set_yticks([-200, 0, 200])
     ax2.set_xticks([-200, 0, 200])
@@ -115,9 +116,9 @@ def main():
     ax3.set_yticklabels([r'$-50$', r'$0$', r'$50$'], ha='right')
 
     #  --------------------Plot first set of panels of n = 50------------------
-    f2 = plt.figure(2)
-    plot_row(f2, m1, blocks_50, r_50, 650)
-    ax1, ax2, ax3 = f2.get_axes()
+    fig2 = plt.figure()
+    plot_row(fig2, m1, blocks_50, r_50, 650)
+    ax1, ax2, ax3 = fig2.get_axes()
     ax1.set_ylabel(r'$\mathrm{{n = {0}}}$'.format('50'))
     ax2.set_xticks([-600, 0, 600])
     ax2.set_yticks([-600, 0, 600])
@@ -126,9 +127,9 @@ def main():
     ax3.set_yticklabels([r'$-200$', r'$0$', r'$200$'], ha='right')
 
     #  --------------------Plot first set of panels of n = 100------------------
-    f3 = plt.figure(3)
-    plot_row(f3, m1, blocks_100, r_100, 1600)
-    ax1, ax2, ax3 = f3.get_axes()
+    fig3 = plt.figure()
+    plot_row(fig3, m1, blocks_100, r_100, 1600)
+    ax1, ax2, ax3 = fig3.get_axes()
     ax1.set_ylabel(r'$\mathrm{{n = {0}}}$'.format('100'))
     ax2.set_yticks([-1500, 0, 1500])
     ax2.set_xticks([-1500, 0, 1500])
@@ -140,7 +141,7 @@ def main():
     plt.show()
 
     axes = []
-    for f in [f1, f2, f3]:
+    for f in [fig1, fig2, fig3]:
         axes.extend(f.get_axes())
 
     for ax, letter in zip(axes, 'abcdefghi'):

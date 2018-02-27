@@ -296,10 +296,10 @@ def scatter_density(x, y, ax, lim=1000, log_vmax=600, cmap='inferno', null_cond=
         x (array): x data to plot
         y (array): y data to plot
         ax (obj): the matplotlib axis object to plot on
-        lim (float): axis limits
-        log_vmax: the maximum saturation for the log scale on the density
-        cmap (obj): a colormap to use for the density
-        null_cond (float): a number used to ignore noise in the data below a certain threshold
+        lim (float): axis limits, defaults to 1000
+        log_vmax (float): the maximum saturation for the log scale on the density, defaults to 600
+        cmap (obj): a colormap to use for the density, defaults to inferno
+        null_cond (float): a number used to ignore noise in the data below a certain threshold, defaults to 0
 
     """
 
