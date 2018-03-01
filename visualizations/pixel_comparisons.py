@@ -66,51 +66,51 @@ from coord import CRD
 #     ax.set(adjustable='box-forced', aspect='equal')
 #
 #     return best_p0_diff
+#
+#
+# def export_to_standard_form(x, y):
+#     bl = {'referenceFD': y, 'secondaryFD': x, 'diskangle': None}
+#     return bl
+#
 
-
-def export_to_standard_form(x, y):
-    bl = {'referenceFD': y, 'secondaryFD': x, 'diskangle': None}
-    return bl
-
-
-def create_sim_variable_times():
-    """Input an instrument and plot sample data at different time scales pixel for pixel.
-
-    This will compare two magnetograms in time pixel for pixel with a 2D histogram shown on a log scale.
-
-    """
-    cond = 20
-    times = ['2 hrs', '6 hrs', '24 hrs']
-
-    files = glob.glob('test_mgnts/*.dat')
-    f, grid = plt.subplots(1, 3, figsize=(16, 16/3), sharex='col', sharey='row', gridspec_kw={'wspace': 0, 'hspace': 0})
-    lim = 1000
-    edges = np.arange(-987.5, 987.5, 25)
-
-    for file, ax in zip(files[1:], grid.flatten()):
-        m1, m2 = c.prepare_simulation(files[0], file)
-        x = m2.remap.ravel()
-        y = m1.im_corr.v.ravel()
-        ind = (np.abs(x) > cond) * (np.abs(y) > cond) * np.isfinite(x) * np.isfinite(y)
-        ax.hist2d(x[ind], y[ind], cmap='inferno', norm=colors.LogNorm(), bins=edges)
-        ax.axis([-lim, lim, -lim, lim])
-        ax.set_facecolor('black')
-
-    for ax, letter in zip(f.get_axes(), times):
-        ax.annotate(
-            '{0}'.format(letter),
-            xy=(0, 1), xycoords='axes fraction',
-            xytext=(7, -25), textcoords='offset points',
-            ha='left', va='bottom', fontsize=19, color='white', family='serif')
-
-    for ax in grid.flatten():
-        ax.xaxis.set_major_locator(MaxNLocator(nbins=3, prune='both'))
-        ax.yaxis.set_major_locator(MaxNLocator(nbins=3, prune='both'))
-        ax.xaxis.set_tick_params(labelsize=16)
-        ax.yaxis.set_tick_params(labelsize=16)
-
-    grid[0].set_ylabel('AFT Simulation', fontsize=30)
-
+# def create_sim_variable_times():
+#     """Input an instrument and plot sample data at different time scales pixel for pixel.
+#
+#     This will compare two magnetograms in time pixel for pixel with a 2D histogram shown on a log scale.
+#
+#     """
+#     cond = 20
+#     times = ['2 hrs', '6 hrs', '24 hrs']
+#
+#     files = glob.glob('test_mgnts/*.dat')
+#     f, grid = plt.subplots(1, 3, figsize=(16, 16/3), sharex='col', sharey='row', gridspec_kw={'wspace': 0, 'hspace': 0})
+#     lim = 1000
+#     edges = np.arange(-987.5, 987.5, 25)
+#
+#     for file, ax in zip(files[1:], grid.flatten()):
+#         m1, m2 = c.prepare_simulation(files[0], file)
+#         x = m2.remap.ravel()
+#         y = m1.im_corr.v.ravel()
+#         ind = (np.abs(x) > cond) * (np.abs(y) > cond) * np.isfinite(x) * np.isfinite(y)
+#         ax.hist2d(x[ind], y[ind], cmap='inferno', norm=colors.LogNorm(), bins=edges)
+#         ax.axis([-lim, lim, -lim, lim])
+#         ax.set_facecolor('black')
+#
+#     for ax, letter in zip(f.get_axes(), times):
+#         ax.annotate(
+#             '{0}'.format(letter),
+#             xy=(0, 1), xycoords='axes fraction',
+#             xytext=(7, -25), textcoords='offset points',
+#             ha='left', va='bottom', fontsize=19, color='white', family='serif')
+#
+#     for ax in grid.flatten():
+#         ax.xaxis.set_major_locator(MaxNLocator(nbins=3, prune='both'))
+#         ax.yaxis.set_major_locator(MaxNLocator(nbins=3, prune='both'))
+#         ax.xaxis.set_tick_params(labelsize=16)
+#         ax.yaxis.set_tick_params(labelsize=16)
+#
+#     grid[0].set_ylabel('AFT Simulation', fontsize=30)
+#
 
 def create_variable_time_plot(instr):
     """Input an instrument and plot sample data at different time scales pixel for pixel.
