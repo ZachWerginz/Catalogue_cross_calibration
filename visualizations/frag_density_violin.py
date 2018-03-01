@@ -105,7 +105,7 @@ def main():
     r_100 = u.download_cc_data('spmg', 'spmg', 100, '23 hours', '25 hours')
 
     #  --------------------Plot first set of panels of n = 25------------------
-    fig1 = plt.figure()
+    fig1 = plt.figure(figsize=(16, 16 / 3))
     plot_row(fig1, m1, blocks_25, r_25, 250)
     ax1, ax2, ax3 = fig1.get_axes()
     ax1.set_ylabel(r'$\mathrm{{n = {0}}}$'.format('25'))
@@ -116,7 +116,7 @@ def main():
     ax3.set_yticklabels([r'$-50$', r'$0$', r'$50$'], ha='right')
 
     #  --------------------Plot first set of panels of n = 50------------------
-    fig2 = plt.figure()
+    fig2 = plt.figure(figsize=(16, 16 / 3))
     plot_row(fig2, m1, blocks_50, r_50, 650)
     ax1, ax2, ax3 = fig2.get_axes()
     ax1.set_ylabel(r'$\mathrm{{n = {0}}}$'.format('50'))
@@ -127,7 +127,7 @@ def main():
     ax3.set_yticklabels([r'$-200$', r'$0$', r'$200$'], ha='right')
 
     #  --------------------Plot first set of panels of n = 100------------------
-    fig3 = plt.figure()
+    fig3 = plt.figure(figsize=(16, 16 / 3))
     plot_row(fig3, m1, blocks_100, r_100, 1600)
     ax1, ax2, ax3 = fig3.get_axes()
     ax1.set_ylabel(r'$\mathrm{{n = {0}}}$'.format('100'))
