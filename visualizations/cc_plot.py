@@ -27,6 +27,7 @@ __authors__ = ["Zach Werginz", "Andrés Muñoz-Jaramillo"]
 __email__ = ["zachary.werginz@snc.edu", "amunozj@gsu.edu"]
 
 matplotlib.rcParams.update({'font.size': 22})
+plt.rc('text', usetex=True)
 
 
 def add_identity(axes, *line_args, **line_kwargs):

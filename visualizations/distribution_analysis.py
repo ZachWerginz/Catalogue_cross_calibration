@@ -14,30 +14,29 @@ def gaussian(x, A, sigma, mu):
 
 
 def main():
+    plt.rc('text', usetex=True)
     plt.rcParams["font.weight"] = "bold"
     plt.rcParams["axes.labelweight"] = "bold"
 
     plt.ion()
     color = color = (81 / 255, 178 / 255, 76 / 255)
 
-    r_100 = u.download_cc_data('spmg', 'spmg', 25, '23 hours', '25 hours')
+    r_100 = u.download_cc_data('spmg', 'spmg', 100, '23 hours', '25 hours')
 
     fig = plt.figure(figsize=(19, 19 / 3))
-    fig.subplots_adjust(top=0.88, bottom=0.11, left=0.133, right=0.9, hspace=0.2, wspace=0.0)
-    # fig.subplots_adjust(top=0.93, bottom=0.293, left=0.113, right=0.9, hspace=0.2, wspace=0.0)
+    fig.subplots_adjust(top=0.940, bottom=0.11, left=0.125, right=0.89, hspace=0.2, wspace=0.0)
     ax1 = fig.add_subplot(131)
-    ax2 = fig.add_subplot(132, sharey=ax1)
+    ax2 = fig.add_subplot(132)
     ax3 = fig.add_subplot(133)
 
     ccplot.violin_plot(r_100, None, ax1, clr=color, percentiles=[0, 100], axes_swap=False)
     ccplot.violin_plot(r_100, None, ax2, clr=color, percentiles=[0, 100], axes_swap=True)
     ax1.set_ylabel(r'$\mathrm{{Reference\ Flux\ Density\ (Mx/cm^2)}}$')
-    ax1.set_xlabel(r'$\mathrm{{+24\ hr}}$')
-    ax2.set_xlabel(r'$\mathrm{{-24\ hr}}$')
+    ax2.set_xlabel(r'$\mathrm{{Magnetic\ Flux\ Density\ (Mx/cm^2)}}$')
+    ax1.annotate(r'$\mathrm{{+24\ hr}}$', xy=(0.5, 1), xycoords='axes fraction', ha='center', color='black')
+    ax2.annotate(r'$\mathrm{{-24\ hr}}$', xy=(0.5, 1), xycoords='axes fraction', ha='center', color='black')
     ax2.tick_params(axis='y', left='off', right='off', labelleft='off', labelright='off')
-    # ax3.tick_params(axis='y', left='off', right='on', labelleft='off', labelright='on')
     ax3.yaxis.tick_right()
-    # ax3.set(adjustable='box-forced')
 
     for ax, letter in zip(fig.get_axes(), 'abc'):
         ax.annotate(
@@ -79,7 +78,7 @@ def main():
     ax3.axvline(x=xspace[ind1], color='orange', ls='-', zorder=1, label='Bin Median')
     ax3.axvline(x=xspace[ind2], color='green', ls='-', zorder=1, label='Divided Distribution Median')
     ax3.axvline(x=bin['sliceMed'], color='.2', ls='--', zorder=1, label='Location of Bin')
-    ax3.set_ylabel('Probability Density', rotation=270, labelpad=20)
+    ax3.set_ylabel(r'$\mathrm{{Probability Density}}$', rotation=270, labelpad=20)
     ax3.yaxis.set_label_position('right')
     ax3.set_xlim([0, 300])
 

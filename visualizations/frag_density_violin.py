@@ -108,7 +108,7 @@ def main():
     fig1 = plt.figure(figsize=(18, 6.25))
     plot_row(fig1, m1, blocks_25, r_25, 225)
     ax1, ax2, ax3 = fig1.get_axes()
-    ax1.set_ylabel(r'$\mathrm{{n = {0}}}$'.format('25'))
+    ax1.set_ylabel(r'$\mathrm{{n = {0}}}$'.format('25'), fontsize=40)
     ax2.set_yticks([-150, 0, 150])
     ax2.set_xticks([-150, 0, 150])
     ax2.set_yticklabels([r'$-150', r'$0$', r'$150$'], ha='right')
@@ -119,7 +119,7 @@ def main():
     fig2 = plt.figure(figsize=(18, 6.25))
     plot_row(fig2, m1, blocks_50, r_50, 750)
     ax1, ax2, ax3 = fig2.get_axes()
-    ax1.set_ylabel(r'$\mathrm{{n = {0}}}$'.format('50'))
+    ax1.set_ylabel(r'$\mathrm{{n = {0}}}$'.format('50'), fontsize=40)
     ax2.set_xticks([-500, 0, 500])
     ax2.set_yticks([-500, 0, 500])
     ax2.set_yticklabels([r'$-500$', r'$0$', r'$500$'], ha='right')
@@ -130,7 +130,7 @@ def main():
     fig3 = plt.figure(figsize=(18, 6.25))
     plot_row(fig3, m1, blocks_100, r_100, 1500)
     ax1, ax2, ax3 = fig3.get_axes()
-    ax1.set_ylabel(r'$\mathrm{{n = {0}}}$'.format('100'))
+    ax1.set_ylabel(r'$\mathrm{{n = {0}}}$'.format('100'), fontsize=40)
     ax2.set_yticks([-1000, 0, 1000])
     ax2.set_xticks([-1000, 0, 1000])
     ax2.set_yticklabels([r'$-1000$', r'$0$', r'$1000$'], ha='right')
@@ -143,6 +143,7 @@ def main():
     axes = []
     for f in [fig1, fig2, fig3]:
         axes.extend(f.get_axes())
+        f.subplots_adjust(top=1.0, bottom=0.0, left=0.05, right=0.99, hspace=0.2, wspace=0.0)
 
     for ax, letter in zip(axes, 'abcdefghi'):
         if letter in 'beh':
